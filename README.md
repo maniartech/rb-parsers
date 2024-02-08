@@ -54,7 +54,7 @@ println!("{:?}", tokens);
 
 ## Examples
 
-You can find more examples in the `examples/` directory of the repository, demonstrating various use cases and configurations.
+You can find more examples in the `tests/` directory of the repository, demonstrating various use cases and configurations.
 
 ## Contributing
 
