@@ -28,6 +28,14 @@ impl Tokenizer {
         self.rules.push(rule);
     }
 
+    pub fn add_closure_rule(
+        &mut self,
+        cb: Box<dyn Fn(&str) -> Result<Option<Token>, TokenizationError>>,
+    ) {
+        let rule = RuleType::Closure(rules::ClosureRule::new(cb));
+        self.rules.push(rule);
+    }
+
     // Adjust the tokenize method to handle the Option for default_rule
     pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
@@ -77,8 +85,14 @@ impl Tokenizer {
                         matched = true;
                         break; // Break to process the next segment of input
                     }
-                    Ok(None) => {}            // No match, continue to next rule
-                    Err(e) => errors.push(e), // Error encountered
+                    Ok(None) => {} // No match, continue to next rule
+                    Err(e) => {
+                        print!(
+                            "Error while processing input: {:?} at line: {:?} and column: {:?}\n",
+                            e, current_line, current_column
+                        );
+                        errors.push(e)
+                    } // Error encountered
                 }
             }
 
