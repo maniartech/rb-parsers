@@ -39,6 +39,8 @@ let mut tokenizer = Tokenizer::new();
 tokenizer.add_rule(RuleType::Regex(RegexRule::new(r"^\d+", "Number", None)));
 tokenizer.add_rule(RuleType::Regex(RegexRule::new(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None)));
 tokenizer.add_rule(RuleType::Symbol(SymbolRule::new("+", "Operator", Some("Plus"))));
+tokenizer.add_rule(RuleType::Symbol(SymbolRule::new("(", "Operator", Some("OpenParen"),)));
+tokenizer.add_rule(RuleType::Symbol(SymbolRule::new(")", "Operator", Some("CloseParen"),)));
 
 let tokens = tokenizer.tokenize("ADD(2 + 2)").unwrap();
 println!("{:?}", tokens);
