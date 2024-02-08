@@ -8,7 +8,7 @@ pub enum RuleType {
     Symbol(SymbolRule),
     Regex(RegexRule),
     Closure(ClosureRule),
-    // Include other specific rules as necessary
+    Rule(Box<dyn Rule>),
 }
 
 impl Rule for RuleType {
@@ -17,6 +17,7 @@ impl Rule for RuleType {
             RuleType::Symbol(rule) => rule.process(input),
             RuleType::Regex(rule) => rule.process(input),
             RuleType::Closure(rule) => rule.process(input),
+            RuleType::Rule(rule) => rule.process(input),
         }
     }
 }

@@ -1,38 +1,15 @@
 extern crate rb_tokenizer;
 
-use rb_tokenizer::{
-    rules::{RegexRule, RuleType, SymbolRule},
-    Tokenizer,
-};
+use rb_tokenizer::Tokenizer;
 
 fn get_tokenizer() -> Tokenizer {
     let mut tokenizer = Tokenizer::new();
 
-    tokenizer.add_rule(RuleType::Regex(RegexRule::new(r"^\d+", "Number", None)));
-
-    tokenizer.add_rule(RuleType::Regex(RegexRule::new(
-        r"^[a-zA-Z_][a-zA-Z0-9_]*",
-        "Identifier",
-        None,
-    )));
-
-    tokenizer.add_rule(RuleType::Symbol(SymbolRule::new(
-        "(",
-        "Operator",
-        Some("OpenParen"),
-    )));
-
-    tokenizer.add_rule(RuleType::Symbol(SymbolRule::new(
-        ")",
-        "Operator",
-        Some("CloseParen"),
-    )));
-
-    tokenizer.add_rule(RuleType::Symbol(SymbolRule::new(
-        "+",
-        "Operator",
-        Some("Plus"),
-    )));
+    tokenizer.add_regex_rule(r"^\d+", "Number", None);
+    tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_symbol_rule("(", "Operator", Some("OpenParen"));
+    tokenizer.add_symbol_rule(")", "Operator", Some("CloseParen"));
+    tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
 
     tokenizer
 }

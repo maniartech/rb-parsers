@@ -1,4 +1,4 @@
-use crate::rules::{Rule, RuleType};
+use crate::rules::{self, RegexRule, Rule, RuleType, SymbolRule};
 use crate::tokens::{Token, TokenizationError};
 pub struct Tokenizer {
     rules: Vec<RuleType>,
@@ -9,7 +9,22 @@ impl Tokenizer {
         Tokenizer { rules: Vec::new() }
     }
 
-    pub fn add_rule(&mut self, rule: RuleType) {
+    pub fn add_rule(&mut self, rule: Box<dyn rules::Rule>) {
+        self.rules.push(RuleType::Rule(rule));
+    }
+
+    pub fn add_regex_rule(
+        &mut self,
+        pattern: &str,
+        token_type: &str,
+        sub_token_type: Option<&str>,
+    ) {
+        let rule = RuleType::Regex(RegexRule::new(pattern, token_type, sub_token_type));
+        self.rules.push(rule);
+    }
+
+    pub fn add_symbol_rule(&mut self, symbol: &str, token_type: &str, default_rule: Option<&str>) {
+        let rule = RuleType::Symbol(SymbolRule::new(symbol, token_type, default_rule));
         self.rules.push(rule);
     }
 
