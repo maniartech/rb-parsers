@@ -42,6 +42,16 @@ tokenizer.add_rule(RuleType::Symbol(SymbolRule::new("+", "Operator", Some("Plus"
 
 let tokens = tokenizer.tokenize("ADD(2 + 2)").unwrap();
 println!("{:?}", tokens);
+// Output:
+// Ok([
+//  Token { token_type: "Identifier", token_sub_type: None, value: "ADD", line: 1, column: 1 },
+//  Token { token_type: "Operator", token_sub_type: Some("OpenParen"), value: "(", line: 1, column: 4 },
+//  Token { token_type: "Number", token_sub_type: None, value: "2", line: 1, column: 5 },
+//  Token { token_type: "Operator", token_sub_type: Some("Plus"), value: "+", line: 1, column: 7 },
+//  Token { token_type: "Number", token_sub_type: None, value: "2", line: 1, column: 12 },
+//  Token { token_type: "Operator", token_sub_type: Some("CloseParen"), value: ")", line: 1, column: 13 }
+// ])
+
 ```
 
 ## Examples
