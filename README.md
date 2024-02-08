@@ -29,18 +29,15 @@ rb-tokenizer = { git = "https://github.com/maniartech/rb-tokenizer.git" }
 To use `rb-tokenizer` in your project, start by creating a `Tokenizer` instance and adding rules:
 
 ```rust
-use rb_tokenizer::{
-    rules::{RegexRule, RuleType, SymbolRule},
-    Tokenizer,
-};
+use rb_tokenizer::Tokenizer;
 
 let mut tokenizer = Tokenizer::new();
 
-tokenizer.add_rule(RuleType::Regex(RegexRule::new(r"^\d+", "Number", None)));
-tokenizer.add_rule(RuleType::Regex(RegexRule::new(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None)));
-tokenizer.add_rule(RuleType::Symbol(SymbolRule::new("+", "Operator", Some("Plus"))));
-tokenizer.add_rule(RuleType::Symbol(SymbolRule::new("(", "Operator", Some("OpenParen"),)));
-tokenizer.add_rule(RuleType::Symbol(SymbolRule::new(")", "Operator", Some("CloseParen"),)));
+tokenizer.add_regex_rule(r"^\d+", "Number", None);
+tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+tokenizer.add_symbol_rule("(", "Operator", Some("OpenParen"));
+tokenizer.add_symbol_rule(")", "Operator", Some("CloseParen"));
+tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
 
 let tokens = tokenizer.tokenize("ADD(2 + 2)").unwrap();
 println!("{:?}", tokens);
@@ -53,7 +50,6 @@ println!("{:?}", tokens);
 //  Token { token_type: "Number", token_sub_type: None, value: "2", line: 1, column: 12 },
 //  Token { token_type: "Operator", token_sub_type: Some("CloseParen"), value: ")", line: 1, column: 13 }
 // ])
-
 ```
 
 ## Examples
