@@ -1,5 +1,5 @@
-#[derive(Debug, PartialEq)]
 /// `Token` struct represents a token in a programming language.
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     /// `token_type` is a string that represents the type of the token.
     pub token_type: String,
@@ -18,16 +18,4 @@ pub struct Token {
 
     /// `column` is an unsigned integer that represents the column number in the source code where the token starts.
     pub column: usize,
-}
-
-impl Clone for Token {
-    fn clone(&self) -> Token {
-        Token {
-            line: self.line,
-            column: self.column,
-            value: self.value.clone(),
-            token_type: self.token_type.clone(),
-            token_sub_type: self.token_sub_type.clone(),
-        }
-    }
 }
