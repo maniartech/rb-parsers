@@ -9,6 +9,11 @@ pub enum RuleType {
     Regex(RegexRule),
     Closure(ClosureRule),
     Rule(Box<dyn Rule>),
+    Callback(Box<dyn CallbackRule>),
+}
+
+pub trait CallbackRule {
+    fn process(&self, input: &str) -> Result<Option<Token>, TokenizationError>;
 }
 
 impl Rule for RuleType {
@@ -18,6 +23,7 @@ impl Rule for RuleType {
             RuleType::Regex(rule) => rule.process(input),
             RuleType::Closure(rule) => rule.process(input),
             RuleType::Rule(rule) => rule.process(input),
+            RuleType::Callback(rule) => rule.process(input),
         }
     }
 }
