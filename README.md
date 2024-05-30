@@ -72,5 +72,4 @@ Before contributing, please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide.
 
 ## Acknowledgments
 
-- Thanks to all the contributors who spend their time to help improve this project.
 - Inspired by the flexibility of rule-based tokenization in various programming languages and frameworks.
