@@ -1,4 +1,4 @@
-use crate::rules::{self, RegexRule, Rule, RuleType, SymbolRule};
+use crate::rules::{self, CallbackRule, RegexRule, Rule, RuleType, SymbolRule};
 use crate::tokens::{Token, TokenizationError};
 pub struct Tokenizer {
     rules: Vec<RuleType>,
@@ -33,6 +33,11 @@ impl Tokenizer {
         cb: Box<dyn Fn(&str) -> Result<Option<Token>, TokenizationError>>,
     ) {
         let rule = RuleType::Closure(rules::ClosureRule::new(cb));
+        self.rules.push(rule);
+    }
+
+    pub fn add_callback_rule(&mut self, cb: Box<dyn rules::CallbackRule>) {
+        let rule = RuleType::Callback(cb);
         self.rules.push(rule);
     }
 
