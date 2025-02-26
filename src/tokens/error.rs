@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenizationError {
     UnrecognizedToken(String),
     // Define additional error types as needed.
