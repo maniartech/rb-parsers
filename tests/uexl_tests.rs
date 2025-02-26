@@ -1,9 +1,14 @@
 extern crate rb_tokenizer;
 
-use rb_tokenizer::Tokenizer;
+use rb_tokenizer::{Tokenizer, TokenizerConfig};
 
 fn get_tokenizer() -> Tokenizer {
-    let mut tokenizer = Tokenizer::new();
+    let config = TokenizerConfig {
+        tokenize_whitespace: false,
+        continue_on_error: true,
+        error_tolerance_limit: 5,
+    };
+    let mut tokenizer = Tokenizer::with_config(config);
 
     // Structural characters
     tokenizer.add_symbol_rule("(", "Braces", Some("OpenParen"));
@@ -77,5 +82,17 @@ mod tests {
         let tokenizer = get_tokenizer();
         let result = tokenizer.tokenize(r"[1, 2, 3, 4] |map: RAND() * $1 |filter: $1 % 2 == 0");
         println!("{:?}", result);
+    }
+    
+    #[test]
+    fn test_error_handling() {
+        let tokenizer = get_tokenizer();
+        // Introduce an invalid token (@ is not defined in our rules)
+        let result = tokenizer.tokenize(r"[1, 2, @, 4]");
+        assert!(result.is_err(), "Should return an error for invalid token");
+        if let Err(errors) = result {
+            println!("Tokenization errors: {:?}", errors);
+            assert!(!errors.is_empty(), "Should contain at least one error");
+        }
     }
 }

@@ -8,6 +8,8 @@
 - **Extensible Architecture**: Add new rule types to suit your specific tokenization needs.
 - **Performance**: Optimized for speed and efficiency, handling large texts swiftly.
 - **Easy Integration**: Designed to be integrated into larger parsing or text analysis projects.
+- **Configurable Behavior**: Control whitespace handling, error tolerance, and more.
+- **Robust Error Handling**: Configure how the tokenizer deals with unrecognized tokens.
 
 ## Getting Started
 
@@ -29,9 +31,18 @@ rb-tokenizer = { git = "https://github.com/maniartech/rb-tokenizer.git" }
 To use `rb-tokenizer` in your project, start by creating a `Tokenizer` instance and adding rules:
 
 ```rust
-use rb_tokenizer::Tokenizer;
+use rb_tokenizer::{Tokenizer, TokenizerConfig};
 
+// Create tokenizer with default configuration
 let mut tokenizer = Tokenizer::new();
+
+// Or with custom configuration
+let config = TokenizerConfig {
+    tokenize_whitespace: false,
+    continue_on_error: true,
+    error_tolerance_limit: 5,
+};
+let mut tokenizer = Tokenizer::with_config(config);
 
 tokenizer.add_regex_rule(r"^\d+", "Number", None);
 tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
@@ -41,15 +52,31 @@ tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
 
 let tokens = tokenizer.tokenize("ADD(2 + 2)").unwrap();
 println!("{:?}", tokens);
-// Output:
-// Ok([
-//  Token { token_type: "Identifier", token_sub_type: None, value: "ADD", line: 1, column: 1 },
-//  Token { token_type: "Operator", token_sub_type: Some("OpenParen"), value: "(", line: 1, column: 4 },
-//  Token { token_type: "Number", token_sub_type: None, value: "2", line: 1, column: 5 },
-//  Token { token_type: "Operator", token_sub_type: Some("Plus"), value: "+", line: 1, column: 7 },
-//  Token { token_type: "Number", token_sub_type: None, value: "2", line: 1, column: 12 },
-//  Token { token_type: "Operator", token_sub_type: Some("CloseParen"), value: ")", line: 1, column: 13 }
-// ])
+```
+
+### Configuration Options
+
+The `TokenizerConfig` struct provides these configuration options:
+
+- **tokenize_whitespace**: When `true`, whitespace characters are tokenized rather than skipped.
+- **continue_on_error**: When `true`, the tokenizer will attempt to continue after encountering unrecognized tokens.
+- **error_tolerance_limit**: Maximum number of errors before giving up tokenization.
+
+```rust
+// Modify configuration after creating tokenizer
+*tokenizer.config_mut() = TokenizerConfig {
+    tokenize_whitespace: true,
+    ..tokenizer.config().clone()
+};
+```
+
+## Rule Priority
+
+Rules are processed in the order they are added, with earlier rules taking precedence. 
+You can also add rules with explicit priority:
+
+```rust
+tokenizer.add_rule_with_priority(Box::new(your_rule), 0); // Highest priority (processed first)
 ```
 
 ## Examples

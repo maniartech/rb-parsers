@@ -1,16 +1,62 @@
 use crate::rules::{self, CallbackRule, RegexRule, Rule, RuleType, SymbolRule};
 use crate::tokens::{Token, TokenizationError};
+
+#[derive(Debug, Clone)]
+pub struct TokenizerConfig {
+    pub tokenize_whitespace: bool,
+    pub continue_on_error: bool,
+    pub error_tolerance_limit: usize,
+}
+
+impl Default for TokenizerConfig {
+    fn default() -> Self {
+        Self {
+            tokenize_whitespace: false,
+            continue_on_error: false,
+            error_tolerance_limit: 10,
+        }
+    }
+}
+
 pub struct Tokenizer {
     rules: Vec<RuleType>,
+    config: TokenizerConfig,
 }
 
 impl Tokenizer {
     pub fn new() -> Self {
-        Tokenizer { rules: Vec::new() }
+        Tokenizer {
+            rules: Vec::new(),
+            config: TokenizerConfig::default(),
+        }
+    }
+
+    pub fn with_config(config: TokenizerConfig) -> Self {
+        Tokenizer {
+            rules: Vec::new(),
+            config,
+        }
+    }
+
+    pub fn config(&self) -> &TokenizerConfig {
+        &self.config
+    }
+
+    pub fn config_mut(&mut self) -> &mut TokenizerConfig {
+        &mut self.config
     }
 
     pub fn add_rule(&mut self, rule: Box<dyn rules::Rule>) {
         self.rules.push(RuleType::Rule(rule));
+    }
+
+    pub fn add_rule_with_priority(&mut self, rule: Box<dyn rules::Rule>, priority: usize) {
+        // Insert rule at the specified priority (lower index = higher priority)
+        if priority >= self.rules.len() {
+            self.rules.push(RuleType::Rule(rule));
+        } else {
+            self.rules.insert(priority, RuleType::Rule(rule));
+        }
     }
 
     pub fn add_regex_rule(
@@ -52,9 +98,22 @@ impl Tokenizer {
 
         while let Some((start, next_char)) = chars.peek().copied() {
             let mut matched = false;
-
-            // Calculate whitespace and update column if necessary
+            
+            // Handle whitespace based on configuration
             if next_char.is_whitespace() {
+                if self.config.tokenize_whitespace {
+                    // Create a whitespace token
+                    let whitespace_value = next_char.to_string();
+                    tokens.push(Token {
+                        token_type: String::from("Whitespace"),
+                        token_sub_type: if next_char == '\n' { Some(String::from("Newline")) } else { None },
+                        value: whitespace_value,
+                        line: current_line,
+                        column: current_column,
+                    });
+                }
+                
+                // Update line and column counters
                 if next_char == '\n' {
                     current_line += 1;
                     current_column = 1; // Reset column at new line
@@ -92,21 +151,33 @@ impl Tokenizer {
                     }
                     Ok(None) => {} // No match, continue to next rule
                     Err(e) => {
-                        print!(
-                            "Error while processing input: {:?} at line: {:?} and column: {:?}\n",
+                        eprintln!(
+                            "Error while processing input: {:?} at line: {:?} and column: {:?}",
                             e, current_line, current_column
                         );
-                        errors.push(e)
-                    } // Error encountered
+                        errors.push(e.clone());
+                        if errors.len() >= self.config.error_tolerance_limit {
+                            return Err(errors);
+                        }
+                    }
                 }
             }
 
             if !matched {
-                // If no rules matched, consider handling or reporting it
-                errors.push(TokenizationError::UnrecognizedToken(
-                    current_input.to_string(),
-                ));
-                break; // Or handle it differently based on your needs
+                // If no rules matched, record the error
+                let error = TokenizationError::UnrecognizedToken(
+                    format!("Unrecognized token at position {}: {}", start, next_char)
+                );
+                errors.push(error);
+                
+                if self.config.continue_on_error {
+                    // Skip this character and continue
+                    chars.next();
+                    current_column += 1;
+                } else {
+                    // Break on first error
+                    break;
+                }
             }
         }
 
