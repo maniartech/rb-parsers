@@ -6,6 +6,8 @@ pub struct TokenizerConfig {
     pub tokenize_whitespace: bool,
     pub continue_on_error: bool,
     pub error_tolerance_limit: usize,
+    pub preserve_whitespace_in_tokens: bool, // Controls whitespace preservation in tokens like strings
+    pub track_token_positions: bool,        // Controls whether line/column tracking is performed
 }
 
 impl Default for TokenizerConfig {
@@ -14,6 +16,8 @@ impl Default for TokenizerConfig {
             tokenize_whitespace: false,
             continue_on_error: false,
             error_tolerance_limit: 10,
+            preserve_whitespace_in_tokens: true, // Default to preserving whitespace in tokens like strings
+            track_token_positions: true,        // Default to tracking positions
         }
     }
 }
@@ -87,7 +91,7 @@ impl Tokenizer {
         self.rules.push(rule);
     }
 
-    // Adjust the tokenize method to handle the Option for default_rule
+    // Enhanced tokenize method with improved whitespace handling
     pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
         let mut errors = Vec::new();
@@ -98,46 +102,32 @@ impl Tokenizer {
 
         while let Some((start, next_char)) = chars.peek().copied() {
             let mut matched = false;
-            
-            // Handle whitespace based on configuration
-            if next_char.is_whitespace() {
-                if self.config.tokenize_whitespace {
-                    // Create a whitespace token
-                    let whitespace_value = next_char.to_string();
-                    tokens.push(Token {
-                        token_type: String::from("Whitespace"),
-                        token_sub_type: if next_char == '\n' { Some(String::from("Newline")) } else { None },
-                        value: whitespace_value,
-                        line: current_line,
-                        column: current_column,
-                    });
-                }
-                
-                // Update line and column counters
-                if next_char == '\n' {
-                    current_line += 1;
-                    current_column = 1; // Reset column at new line
-                } else {
-                    current_column += 1; // Increment column for spaces
-                }
-                chars.next(); // Consume the whitespace character
-                continue; // Move to the next character
-            }
-
             let current_input = &input[start..];
-
+            
+            // Try to match complex rules first (like strings which can contain whitespace)
+            // This ensures proper handling of tokens like strings that contain whitespace
             for rule in &self.rules {
                 match rule.process(current_input) {
                     Ok(Some(token)) => {
                         let token_len = token.value.len();
-                        tokens.push(Token {
-                            line: current_line,
-                            column: current_column, // Use current column for the token
-                            ..token
-                        });
-                        // Advance the iterator by token_len characters and update column accordingly
+                        
+                        // Track position if configured
+                        let token_with_position = if self.config.track_token_positions {
+                            Token {
+                                line: current_line,
+                                column: current_column,
+                                ..token
+                            }
+                        } else {
+                            token
+                        };
+                        
+                        tokens.push(token_with_position);
+                        
+                        // Advance the iterator by token_len characters and update positions
                         for _ in 0..token_len {
                             if let Some((_, char)) = chars.next() {
+                                // Update position counters
                                 if char == '\n' {
                                     current_line += 1;
                                     current_column = 1;
@@ -151,11 +141,23 @@ impl Tokenizer {
                     }
                     Ok(None) => {} // No match, continue to next rule
                     Err(e) => {
-                        eprintln!(
-                            "Error while processing input: {:?} at line: {:?} and column: {:?}",
+                        let error_message = format!(
+                            "Error while processing input: {:?} at line {} column {}",
                             e, current_line, current_column
                         );
-                        errors.push(e.clone());
+                        eprintln!("{}", error_message);
+                        
+                        let error = if let TokenizationError::UnrecognizedToken(_) = e {
+                            TokenizationError::UnrecognizedToken(
+                                format!("Unrecognized token at line {}, column {}: '{}'", 
+                                    current_line, current_column, next_char)
+                            )
+                        } else {
+                            e.clone()
+                        };
+                        
+                        errors.push(error);
+                        
                         if errors.len() >= self.config.error_tolerance_limit {
                             return Err(errors);
                         }
@@ -163,20 +165,45 @@ impl Tokenizer {
                 }
             }
 
+            // If no rule matched, handle whitespace or report an error
             if !matched {
-                // If no rules matched, record the error
-                let error = TokenizationError::UnrecognizedToken(
-                    format!("Unrecognized token at position {}: {}", start, next_char)
-                );
-                errors.push(error);
-                
-                if self.config.continue_on_error {
-                    // Skip this character and continue
-                    chars.next();
-                    current_column += 1;
+                if next_char.is_whitespace() {
+                    if self.config.tokenize_whitespace {
+                        // Create a whitespace token
+                        let whitespace_value = next_char.to_string();
+                        tokens.push(Token {
+                            token_type: String::from("Whitespace"),
+                            token_sub_type: if next_char == '\n' { Some(String::from("Newline")) } else { None },
+                            value: whitespace_value,
+                            line: current_line,
+                            column: current_column,
+                        });
+                    }
+                    
+                    // Update line and column counters
+                    if next_char == '\n' {
+                        current_line += 1;
+                        current_column = 1; // Reset column at new line
+                    } else {
+                        current_column += 1; // Increment column for spaces
+                    }
+                    chars.next(); // Consume the whitespace character
                 } else {
-                    // Break on first error
-                    break;
+                    // If no rules matched and it's not whitespace, record the error
+                    let error = TokenizationError::UnrecognizedToken(
+                        format!("Unrecognized token at line {}, column {}: '{}'", 
+                            current_line, current_column, next_char)
+                    );
+                    errors.push(error);
+                    
+                    if self.config.continue_on_error {
+                        // Skip this character and continue
+                        chars.next();
+                        current_column += 1;
+                    } else {
+                        // Break on first error
+                        break;
+                    }
                 }
             }
         }
