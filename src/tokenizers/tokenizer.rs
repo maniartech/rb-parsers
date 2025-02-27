@@ -1,4 +1,4 @@
-use crate::rules::{self, RegexRule, Rule, RuleType, SymbolRule};
+use crate::scanners::{self, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 
 #[derive(Debug, Clone)]
@@ -21,21 +21,21 @@ impl Default for TokenizerConfig {
 }
 
 pub struct Tokenizer {
-    rules: Vec<RuleType>,
+    scanners: Vec<ScannerType>,
     config: TokenizerConfig,
 }
 
 impl Tokenizer {
     pub fn new() -> Self {
         Tokenizer {
-            rules: Vec::new(),
+            scanners: Vec::new(),
             config: TokenizerConfig::default(),
         }
     }
 
     pub fn with_config(config: TokenizerConfig) -> Self {
         Tokenizer {
-            rules: Vec::new(),
+            scanners: Vec::new(),
             config,
         }
     }
@@ -48,45 +48,45 @@ impl Tokenizer {
         &mut self.config
     }
 
-    pub fn add_rule(&mut self, rule: Box<dyn rules::Rule>) {
-        self.rules.push(RuleType::Rule(rule));
+    pub fn add_scanner(&mut self, scanner: Box<dyn scanners::Scanner>) {
+        self.scanners.push(ScannerType::Scanner(scanner));
     }
 
-    pub fn add_rule_with_priority(&mut self, rule: Box<dyn rules::Rule>, priority: usize) {
-        // Insert rule at the specified priority (lower index = higher priority)
-        if priority >= self.rules.len() {
-            self.rules.push(RuleType::Rule(rule));
+    pub fn add_scanner_with_priority(&mut self, scanner: Box<dyn scanners::Scanner>, priority: usize) {
+        // Insert scanner at the specified priority (lower index = higher priority)
+        if priority >= self.scanners.len() {
+            self.scanners.push(ScannerType::Scanner(scanner));
         } else {
-            self.rules.insert(priority, RuleType::Rule(rule));
+            self.scanners.insert(priority, ScannerType::Scanner(scanner));
         }
     }
 
-    pub fn add_regex_rule(
+    pub fn add_regex_scanner(
         &mut self,
         pattern: &str,
         token_type: &str,
         sub_token_type: Option<&str>,
     ) {
-        let rule = RuleType::Regex(RegexRule::new(pattern, token_type, sub_token_type));
-        self.rules.push(rule);
+        let scanner = ScannerType::Regex(RegexScanner::new(pattern, token_type, sub_token_type));
+        self.scanners.push(scanner);
     }
 
-    pub fn add_symbol_rule(&mut self, symbol: &str, token_type: &str, default_rule: Option<&str>) {
-        let rule = RuleType::Symbol(SymbolRule::new(symbol, token_type, default_rule));
-        self.rules.push(rule);
+    pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &str, default_scanner: Option<&str>) {
+        let scanner = ScannerType::Symbol(SymbolScanner::new(symbol, token_type, default_scanner));
+        self.scanners.push(scanner);
     }
 
-    pub fn add_closure_rule(
+    pub fn add_closure_scanner(
         &mut self,
         cb: Box<dyn Fn(&str) -> Result<Option<Token>, TokenizationError>>,
     ) {
-        let rule = RuleType::Closure(rules::ClosureRule::new(cb));
-        self.rules.push(rule);
+        let scanner = ScannerType::Closure(scanners::ClosureScanner::new(cb));
+        self.scanners.push(scanner);
     }
 
-    pub fn add_callback_rule(&mut self, cb: Box<dyn rules::CallbackRule>) {
-        let rule = RuleType::Callback(cb);
-        self.rules.push(rule);
+    pub fn add_callback_scanner(&mut self, cb: Box<dyn scanners::CallbackScanner>) {
+        let scanner = ScannerType::Callback(cb);
+        self.scanners.push(scanner);
     }
 
     // Enhanced tokenize method with improved whitespace handling
@@ -102,9 +102,9 @@ impl Tokenizer {
             let mut matched = false;
             let current_input = &input[start..];
             
-            // Try to match complex rules first (like strings which can contain whitespace)
-            for rule in &self.rules {
-                match rule.process(current_input) {
+            // Try to match complex scanners first (like strings which can contain whitespace)
+            for scanner in &self.scanners {
+                match scanner.scan(current_input) {
                     Ok(Some(token)) => {
                         let token_len = token.value.len();
                         
@@ -138,7 +138,7 @@ impl Tokenizer {
                     Ok(None) => {}
                     Err(e) => {
                         let error_message = format!(
-                            "Error while processing input: {:?} at line {} column {}",
+                            "Error while scanning input: {:?} at line {} column {}",
                             e, current_line, current_column
                         );
                         eprintln!("{}", error_message);

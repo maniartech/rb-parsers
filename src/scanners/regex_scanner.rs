@@ -1,16 +1,16 @@
-use super::Rule;
+use super::Scanner;
 use crate::tokens::Token;
 use crate::tokens::TokenizationError;
 
 use regex::Regex;
 
-pub struct RegexRule {
+pub struct RegexScanner {
     pub pattern: Regex,
     pub token_type: String,
     pub token_sub_type: Option<String>,
 }
 
-impl RegexRule {
+impl RegexScanner {
     pub fn new(pattern: &str, token_type: &str, token_sub_type: Option<&str>) -> Self {
         Self {
             pattern: Regex::new(pattern).unwrap(),
@@ -20,8 +20,8 @@ impl RegexRule {
     }
 }
 
-impl Rule for RegexRule {
-    fn process(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+impl Scanner for RegexScanner {
+    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
         if let Some(mat) = self.pattern.find(input) {
             Ok(Some(Token {
                 token_type: self.token_type.clone(),

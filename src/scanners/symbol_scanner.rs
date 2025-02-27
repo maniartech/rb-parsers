@@ -1,14 +1,14 @@
-use super::rule::Rule;
+use super::scanner::Scanner;
 use crate::tokens::Token;
 use crate::tokens::TokenizationError;
 
-pub struct SymbolRule {
+pub struct SymbolScanner {
     pub symbol: String,
     pub token_type: String,
     pub token_sub_type: Option<String>,
 }
 
-impl SymbolRule {
+impl SymbolScanner {
     pub fn new(symbol: &str, token_type: &str, token_sub_type: Option<&str>) -> Self {
         Self {
             symbol: symbol.to_string(),
@@ -18,8 +18,8 @@ impl SymbolRule {
     }
 }
 
-impl Rule for SymbolRule {
-    fn process(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+impl Scanner for SymbolScanner {
+    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
         if input.starts_with(&self.symbol) {
             Ok(Some(Token {
                 line: 0,

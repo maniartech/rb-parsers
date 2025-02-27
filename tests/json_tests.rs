@@ -10,21 +10,21 @@ fn get_json_tokenizer() -> Tokenizer {
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Structural characters
-    tokenizer.add_symbol_rule("{", "Brace", Some("OpenBrace"));
-    tokenizer.add_symbol_rule("}", "Brace", Some("CloseBrace"));
-    tokenizer.add_symbol_rule("[", "Bracket", Some("OpenBracket"));
-    tokenizer.add_symbol_rule("]", "Bracket", Some("CloseBracket"));
-    tokenizer.add_symbol_rule(":", "Colon", None);
-    tokenizer.add_symbol_rule(",", "Comma", None);
+    tokenizer.add_symbol_scanner("{", "Brace", Some("OpenBrace"));
+    tokenizer.add_symbol_scanner("}", "Brace", Some("CloseBrace"));
+    tokenizer.add_symbol_scanner("[", "Bracket", Some("OpenBracket"));
+    tokenizer.add_symbol_scanner("]", "Bracket", Some("CloseBracket"));
+    tokenizer.add_symbol_scanner(":", "Colon", None);
+    tokenizer.add_symbol_scanner(",", "Comma", None);
 
     // Strings
-    tokenizer.add_regex_rule(r#"^"([^"\\]|\\.)*""#, "String", None);
+    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
 
     // Numbers
-    tokenizer.add_regex_rule(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
+    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
 
     // Literals
-    tokenizer.add_regex_rule(r"^(true|false|null)\b", "Literal", None);
+    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None);
 
     tokenizer
 }

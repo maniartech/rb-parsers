@@ -1,11 +1,11 @@
 # rb-tokenizer
 
-`rb-tokenizer` is a flexible, rule-based tokenizer written in Rust, designed to make text tokenization customizable and extendable. It supports a wide range of applications, from simple text parsing to complex programming language lexers.
+`rb-tokenizer` is a flexible, scanner-based tokenizer written in Rust, designed to make text tokenization customizable and extendable. It supports a wide range of applications, from simple text parsing to complex programming language lexers.
 
 ## Features
 
-- **Customizable Tokenization**: Easily define your own tokenization rules with regular expressions and symbols.
-- **Extensible Architecture**: Add new rule types to suit your specific tokenization needs.
+- **Customizable Tokenization**: Easily define your own tokenization scanners with regular expressions and symbols.
+- **Extensible Architecture**: Add new scanner types to suit your specific tokenization needs.
 - **Performance**: Optimized for speed and efficiency, handling large texts swiftly.
 - **Easy Integration**: Designed to be integrated into larger parsing or text analysis projects.
 - **Configurable Behavior**: Control whitespace handling, error tolerance, position tracking, and more.
@@ -29,7 +29,7 @@ rb-tokenizer = { git = "https://github.com/maniartech/rb-tokenizer.git" }
 
 ### Basic Usage
 
-To use `rb-tokenizer` in your project, start by creating a `Tokenizer` instance and adding rules:
+To use `rb-tokenizer` in your project, start by creating a `Tokenizer` instance and adding scanners:
 
 ```rust
 use rb_tokenizer::{Tokenizer, TokenizerConfig};
@@ -46,11 +46,11 @@ let config = TokenizerConfig {
 };
 let mut tokenizer = Tokenizer::with_config(config);
 
-tokenizer.add_regex_rule(r"^\d+", "Number", None);
-tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-tokenizer.add_symbol_rule("(", "Operator", Some("OpenParen"));
-tokenizer.add_symbol_rule(")", "Operator", Some("CloseParen"));
-tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
+tokenizer.add_regex_scanner(r"^\d+", "Number", None);
+tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+tokenizer.add_symbol_scanner("(", "Operator", Some("OpenParen"));
+tokenizer.add_symbol_scanner(")", "Operator", Some("CloseParen"));
+tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
 
 let tokens = tokenizer.tokenize("ADD(2 + 2)").unwrap();
 println!("{:?}", tokens);
@@ -73,23 +73,23 @@ The `TokenizerConfig` struct provides these configuration options:
 };
 ```
 
-## Rule Priority and Whitespace Handling
+## Scanner Priority and Whitespace Handling
 
-Rules are processed in the order they are added, with earlier rules taking precedence. 
-You can also add rules with explicit priority:
+Scanners are scanned in the order they are added, with earlier scanners taking precedence. 
+You can also add scanners with explicit priority:
 
 ```rust
-tokenizer.add_rule_with_priority(Box::new(your_rule), 0); // Highest priority (processed first)
+tokenizer.add_scanner_with_priority(Box::new(your_scanner), 0); // Highest priority (scanned first)
 ```
 
-Each rule is responsible for handling its own whitespace behavior. For example, string rules should preserve their internal whitespace, while operator rules typically don't need to handle whitespace:
+Each scanner is responsible for handling its own whitespace behavior. For example, string scanners should preserve their internal whitespace, while operator scanners typically don't need to handle whitespace:
 
 ```rust
-// String rule that preserves internal whitespace
-tokenizer.add_regex_rule(r#"^"([^"\\]|\\.)*""#, "String", None);
+// String scanner that preserves internal whitespace
+tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
 
-// Operator rule that doesn't need to handle whitespace
-tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
+// Operator scanner that doesn't need to handle whitespace
+tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
 ```
 
 ## Whitespace Tokenization
@@ -99,7 +99,7 @@ The tokenizer provides two modes of whitespace handling:
 - When `tokenize_whitespace` is `false`, whitespace is skipped during tokenization.
 - When `tokenize_whitespace` is `true`, whitespace is treated as a separate token.
 
-String literals and other tokens that need to preserve their internal whitespace handle this within their own rule implementation, making the behavior consistent and predictable.
+String literals and other tokens that need to preserve their internal whitespace handle this within their own scanner implementation, making the behavior consistent and predictable.
 
 ## Examples
 
@@ -121,4 +121,4 @@ Before contributing, please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide.
 
 ## Acknowledgments
 
-- Inspired by the flexibility of rule-based tokenization in various programming languages and frameworks.
+- Inspired by the flexibility of scanner-based tokenization in various programming languages and frameworks.

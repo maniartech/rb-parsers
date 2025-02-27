@@ -9,16 +9,16 @@ fn get_string_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    // Add string rules with different quote styles
-    tokenizer.add_regex_rule(r#"^"([^"\\]|\\.)*""#, "String", Some("DoubleQuoted"));
-    tokenizer.add_regex_rule(r#"^'([^'\\]|\\.)*'"#, "String", Some("SingleQuoted"));
-    // Backtick strings are raw strings - no escape processing
-    tokenizer.add_regex_rule(r#"^`[^`]*`"#, "String", Some("Backtick"));
+    // Add string scanners with different quote styles
+    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", Some("DoubleQuoted"));
+    tokenizer.add_regex_scanner(r#"^'([^'\\]|\\.)*'"#, "String", Some("SingleQuoted"));
+    // Backtick strings are raw strings - no escape scanning
+    tokenizer.add_regex_scanner(r#"^`[^`]*`"#, "String", Some("Backtick"));
     
-    // Add other rules, but they must come after string rules to ensure proper string handling
-    tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-    tokenizer.add_symbol_rule("=", "Operator", Some("Assignment"));
-    tokenizer.add_symbol_rule(";", "Semicolon", None);
+    // Add other scanners, but they must come after string scanners to ensure proper string handling
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_symbol_scanner("=", "Operator", Some("Assignment"));
+    tokenizer.add_symbol_scanner(";", "Semicolon", None);
     
     tokenizer
 }

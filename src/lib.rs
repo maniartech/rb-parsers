@@ -1,4 +1,4 @@
-pub mod rules;
+pub mod scanners;
 pub mod tokens;
 pub mod tokenizers;
 

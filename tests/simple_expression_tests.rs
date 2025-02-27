@@ -11,16 +11,16 @@ fn get_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    tokenizer.add_regex_rule(r"^\d+", "Number", None);
-    tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-    tokenizer.add_symbol_rule("(", "Operator", Some("OpenParen"));
-    tokenizer.add_symbol_rule(")", "Operator", Some("CloseParen"));
+    tokenizer.add_regex_scanner(r"^\d+", "Number", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_symbol_scanner("(", "Operator", Some("OpenParen"));
+    tokenizer.add_symbol_scanner(")", "Operator", Some("CloseParen"));
 
     // Operators
-    tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
-    tokenizer.add_symbol_rule("-", "Operator", Some("Minus"));
-    tokenizer.add_symbol_rule("*", "Operator", Some("Multiply"));
-    tokenizer.add_symbol_rule("/", "Operator", Some("Divide"));
+    tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
+    tokenizer.add_symbol_scanner("-", "Operator", Some("Minus"));
+    tokenizer.add_symbol_scanner("*", "Operator", Some("Multiply"));
+    tokenizer.add_symbol_scanner("/", "Operator", Some("Divide"));
 
     tokenizer
 }
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn test_error_handling() {
         let tokenizer = get_tokenizer();
-        // Use an unrecognized character @ which is not defined in our rules
+        // Use an unrecognized character @ which is not defined in our scanners
         let result = tokenizer.tokenize("2 + @ * 5");
         assert!(result.is_err(), "Should return an error for invalid token");
         

@@ -9,9 +9,9 @@ fn get_whitespace_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    // Add simple rules
-    tokenizer.add_regex_rule(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-    tokenizer.add_regex_rule(r"^\d+", "Number", None);
+    // Add simple scanners
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^\d+", "Number", None);
     
     tokenizer
 }

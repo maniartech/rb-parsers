@@ -1,6 +1,6 @@
 # Contributing to rb-tokenizer
 
-Thank you for taking the time to contribute to `rb-tokenizer`, a rule-based tokenizer designed for flexibility and ease of integration. This document outlines our guidelines and code of conduct for contributing to this project. By participating in this project, you agree to abide by its terms.
+Thank you for taking the time to contribute to `rb-tokenizer`, a scanner-based tokenizer designed for flexibility and ease of integration. This document outlines our guidelines and code of conduct for contributing to this project. By participating in this project, you agree to abide by its terms.
 
 ## Code of Conduct
 
