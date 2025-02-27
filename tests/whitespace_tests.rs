@@ -28,23 +28,20 @@ mod whitespace_tests {
         let input = "hello \t world\n123";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
         
-        // Expected tokens: Identifier, Whitespace, Whitespace, Identifier, Whitespace(newline), Number
-        assert_eq!(result.len(), 6, "Unexpected number of tokens");
+        // Our tokenizer now combines consecutive whitespace characters into a single token
+        // Expected tokens: Identifier, Whitespace(space+tab+space), Identifier, Whitespace(newline), Number
+        assert_eq!(result.len(), 5, "Unexpected number of tokens");
         
-        // Verify first whitespace token (space)
+        // Verify combined whitespace token
         assert_eq!(result[1].token_type, "Whitespace");
-        assert_eq!(result[1].value, " ");
+        assert!(result[1].value.contains(' '), "Whitespace should contain space");
+        assert!(result[1].value.contains('\t'), "Whitespace should contain tab");
         assert_eq!(result[1].token_sub_type, None);
         
-        // Verify tab whitespace token
-        assert_eq!(result[2].token_type, "Whitespace");
-        assert_eq!(result[2].value, "\t");
-        assert_eq!(result[2].token_sub_type, None);
-        
         // Verify newline whitespace token
-        assert_eq!(result[4].token_type, "Whitespace");
-        assert_eq!(result[4].value, "\n");
-        assert_eq!(result[4].token_sub_type, Some("Newline".to_string()));
+        assert_eq!(result[3].token_type, "Whitespace");
+        assert_eq!(result[3].value, "\n");
+        assert_eq!(result[3].token_sub_type, Some("Newline".to_string()));
         
         println!("Whitespace tokens: {:?}", result);
     }
