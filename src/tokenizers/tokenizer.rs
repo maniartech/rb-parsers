@@ -95,7 +95,7 @@ impl Tokenizer {
         let mut errors = Vec::new();
 
         let mut current_line = 1;
-        let mut current_column = 1; // Start column counting from 1
+        let mut current_column = 1;
         let mut chars = input.char_indices().peekable();
 
         while let Some((start, next_char)) = chars.peek().copied() {
@@ -103,7 +103,6 @@ impl Tokenizer {
             let current_input = &input[start..];
             
             // Try to match complex rules first (like strings which can contain whitespace)
-            // This ensures proper handling of tokens like strings that contain whitespace
             for rule in &self.rules {
                 match rule.process(current_input) {
                     Ok(Some(token)) => {
@@ -122,10 +121,9 @@ impl Tokenizer {
                         
                         tokens.push(token_with_position);
                         
-                        // Advance the iterator by token_len characters and update positions
+                        // Advance the iterator and update positions
                         for _ in 0..token_len {
                             if let Some((_, char)) = chars.next() {
-                                // Update position counters
                                 if char == '\n' {
                                     current_line += 1;
                                     current_column = 1;
@@ -135,9 +133,9 @@ impl Tokenizer {
                             }
                         }
                         matched = true;
-                        break; // Break to process the next segment of input
+                        break;
                     }
-                    Ok(None) => {} // No match, continue to next rule
+                    Ok(None) => {}
                     Err(e) => {
                         let error_message = format!(
                             "Error while processing input: {:?} at line {} column {}",
@@ -145,7 +143,6 @@ impl Tokenizer {
                         );
                         eprintln!("{}", error_message);
                         
-                        // Convert to appropriate error type with location information
                         let error = TokenizationError::UnrecognizedToken(
                             format!("Unrecognized token at line {}, column {}: '{}'", 
                                 current_line, current_column, next_char)
@@ -160,106 +157,63 @@ impl Tokenizer {
                 }
             }
 
-            // If no rule matched, handle whitespace or report an error
             if !matched {
                 if next_char.is_whitespace() {
                     if self.config.tokenize_whitespace {
-                        // Collect all consecutive whitespace characters
-                        let mut tabs = Vec::new();
-                        let mut spaces = Vec::new();
-                        let mut newlines = Vec::new();
-                        let mut carriage_returns = Vec::new();
-                        let mut other_whitespace = Vec::new();
+                        let start_line = current_line;
+                        let start_column = current_column;
+                        let mut whitespace = String::new();
                         let mut has_newline = false;
-                        let mut end_line = current_line;
-                        let mut end_column = current_column;
 
-                        // First character is definitely whitespace
-                        match next_char {
-                            '\t' => tabs.push(next_char),
-                            ' ' => spaces.push(next_char),
-                            '\n' => {
-                                newlines.push(next_char);
-                                has_newline = true;
-                            },
-                            '\r' => carriage_returns.push(next_char),
-                            _ if next_char.is_whitespace() => other_whitespace.push(next_char),
-                            _ => unreachable!(), // We know it's whitespace at this point
-                        };
-                        chars.next(); // Consume first whitespace character
-                        
-                        // Update position for first character
-                        if next_char == '\n' {
-                            end_line += 1;
-                            end_column = 1;
-                        } else {
-                            end_column += 1;
-                        }
-
-                        // Then check remaining characters
-                        while let Some((_, ch)) = chars.peek().copied() {
-                            if ch.is_whitespace() {
-                                match ch {
-                                    '\t' => tabs.push(ch),
-                                    ' ' => spaces.push(ch),
-                                    '\n' => {
-                                        newlines.push(ch);
-                                        has_newline = true;
-                                    },
-                                    '\r' => carriage_returns.push(ch),
-                                    _ => other_whitespace.push(ch),
-                                };
-                                chars.next();
-                                
-                                if ch == '\n' {
-                                    end_line += 1;
-                                    end_column = 1;
-                                } else {
-                                    end_column += 1;
-                                }
-                            } else {
+                        // Consume whitespace characters one by one
+                        while let Some((_, ch)) = chars.peek() {
+                            if !ch.is_whitespace() {
                                 break;
                             }
+                            
+                            // Clone the character to avoid borrowing issues
+                            let current_char = *ch;
+                            whitespace.push(current_char);
+                            has_newline |= current_char == '\n';
+                            
+                            // Advance the iterator
+                            chars.next();
+                            
+                            if current_char == '\n' {
+                                current_line += 1;
+                                current_column = 1;
+                            } else {
+                                current_column += 1;
+                            }
                         }
-
-                        // Combine whitespace while preserving order within each type
-                        let mut whitespace_chars = Vec::new();
-                        whitespace_chars.extend(tabs);
-                        whitespace_chars.extend(spaces);
-                        whitespace_chars.extend(newlines);
-                        whitespace_chars.extend(carriage_returns);
-                        whitespace_chars.extend(other_whitespace);
                         
-                        // Create a single whitespace token for all consecutive whitespace
+                        // Create the whitespace token
                         tokens.push(Token {
                             token_type: String::from("Whitespace"),
                             token_sub_type: if has_newline { Some(String::from("Newline")) } else { None },
-                            value: whitespace_chars.into_iter().collect(),
-                            line: current_line,
-                            column: current_column,
+                            value: whitespace,
+                            line: start_line,
+                            column: start_column,
                         });
-
-                        // Update current position
-                        current_line = end_line;
-                        current_column = end_column;
                     } else {
                         // Skip whitespace when not tokenizing it
-                        while let Some((_, ch)) = chars.peek().copied() {
-                            if ch.is_whitespace() {
-                                chars.next();
-                                if ch == '\n' {
-                                    current_line += 1;
-                                    current_column = 1;
-                                } else {
-                                    current_column += 1;
-                                }
-                            } else {
+                        while let Some((_, ch)) = chars.peek() {
+                            if !ch.is_whitespace() {
                                 break;
+                            }
+                            
+                            let current_char = *ch;
+                            chars.next();
+                            
+                            if current_char == '\n' {
+                                current_line += 1;
+                                current_column = 1;
+                            } else {
+                                current_column += 1;
                             }
                         }
                     }
                 } else {
-                    // If no rules matched and it's not whitespace, record the error
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'", 
                             current_line, current_column, next_char)
@@ -267,11 +221,9 @@ impl Tokenizer {
                     errors.push(error);
                     
                     if self.config.continue_on_error {
-                        // Skip this character and continue
                         chars.next();
                         current_column += 1;
                     } else {
-                        // Break on first error
                         break;
                     }
                 }
