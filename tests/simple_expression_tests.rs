@@ -7,6 +7,7 @@ fn get_tokenizer() -> Tokenizer {
         tokenize_whitespace: false,
         continue_on_error: true,
         error_tolerance_limit: 5,
+        track_token_positions: true,
     };
     let mut tokenizer = Tokenizer::with_config(config);
 

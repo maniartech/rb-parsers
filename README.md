@@ -42,7 +42,6 @@ let config = TokenizerConfig {
     tokenize_whitespace: false,
     continue_on_error: true,
     error_tolerance_limit: 5,
-    preserve_whitespace_in_tokens: true,
     track_token_positions: true,
 };
 let mut tokenizer = Tokenizer::with_config(config);
@@ -64,7 +63,6 @@ The `TokenizerConfig` struct provides these configuration options:
 - **tokenize_whitespace**: When `true`, whitespace characters are tokenized rather than skipped.
 - **continue_on_error**: When `true`, the tokenizer will attempt to continue after encountering unrecognized tokens.
 - **error_tolerance_limit**: Maximum number of errors before giving up tokenization.
-- **preserve_whitespace_in_tokens**: Ensures whitespace is properly preserved in string literals and similar tokens.
 - **track_token_positions**: When `true`, tracks and records line and column positions for each token.
 
 ```rust
@@ -75,7 +73,7 @@ The `TokenizerConfig` struct provides these configuration options:
 };
 ```
 
-## Rule Priority
+## Rule Priority and Whitespace Handling
 
 Rules are processed in the order they are added, with earlier rules taking precedence. 
 You can also add rules with explicit priority:
@@ -84,15 +82,24 @@ You can also add rules with explicit priority:
 tokenizer.add_rule_with_priority(Box::new(your_rule), 0); // Highest priority (processed first)
 ```
 
-## Whitespace Handling
+Each rule is responsible for handling its own whitespace behavior. For example, string rules should preserve their internal whitespace, while operator rules typically don't need to handle whitespace:
 
-The tokenizer has sophisticated whitespace handling capabilities:
+```rust
+// String rule that preserves internal whitespace
+tokenizer.add_regex_rule(r#"^"([^"\\]|\\.)*""#, "String", None);
+
+// Operator rule that doesn't need to handle whitespace
+tokenizer.add_symbol_rule("+", "Operator", Some("Plus"));
+```
+
+## Whitespace Tokenization
+
+The tokenizer provides two modes of whitespace handling:
 
 - When `tokenize_whitespace` is `false`, whitespace is skipped during tokenization.
 - When `tokenize_whitespace` is `true`, whitespace is treated as a separate token.
-- `preserve_whitespace_in_tokens` ensures proper handling of whitespace within string literals and other token types where whitespace is significant.
 
-This makes `rb-tokenizer` ideal for scenarios where precise whitespace control is needed, such as programming language lexers.
+String literals and other tokens that need to preserve their internal whitespace handle this within their own rule implementation, making the behavior consistent and predictable.
 
 ## Examples
 

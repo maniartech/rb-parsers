@@ -1,8 +1,9 @@
 pub mod rules;
 pub mod tokens;
-
 pub mod tokenizers;
-pub use tokenizers::Tokenizer;
+
+// Re-export main types at crate root for easier access
+pub use tokenizers::{Tokenizer, TokenizerConfig};
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
