@@ -157,7 +157,7 @@ impl Tokenizer {
 
                         // For block scanners excluding delimiters, need to find the actual consumed length
                         if let ScannerType::Block(block_scanner) = scanner {
-                            if (!block_scanner.includes_delimiters()) {
+                            if !block_scanner.includes_delimiters() {
                                 // Calculate full length including delimiters
                                 if let Ok(Some(end_pos)) = block_scanner.find_match_end(current_input) {
                                     token_len = end_pos;
@@ -167,7 +167,7 @@ impl Tokenizer {
 
                         // For line scanners excluding delimiters, need to calculate correct length
                         if let ScannerType::Eol(eol_scanner) = scanner {
-                            if (!eol_scanner.includes_delimiter()) {
+                            if !eol_scanner.includes_delimiter() {
                                 // The full match length is the token length plus the delimiter length
                                 token_len = token_len + eol_scanner.delimiter().len();
                             }
