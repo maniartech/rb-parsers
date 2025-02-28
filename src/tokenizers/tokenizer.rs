@@ -1,4 +1,4 @@
-use crate::scanners::{self, BlockScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
+use crate::scanners::{self, BlockScanner, LineScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 
 #[derive(Debug, Clone)]
@@ -111,6 +111,30 @@ impl Tokenizer {
         self.scanners.push(scanner);
     }
 
+    /// Adds a line scanner to the tokenizer.
+    /// This scanner matches content that starts with a specific delimiter and continues until a newline.
+    ///
+    /// # Arguments
+    /// * `delimiter` - The delimiter that marks the beginning of the line-based structure
+    /// * `token_type` - The type of token to create for matched content
+    /// * `token_sub_type` - Optional subtype for more specific token categorization
+    /// * `include_delimiter` - Whether to include the delimiter in the token value
+    pub fn add_line_scanner(
+        &mut self,
+        delimiter: &str,
+        token_type: &str,
+        token_sub_type: Option<&str>,
+        include_delimiter: bool,
+    ) {
+        let scanner = ScannerType::Line(LineScanner::new(
+            delimiter,
+            token_type,
+            token_sub_type,
+            include_delimiter,
+        ));
+        self.scanners.push(scanner);
+    }
+
     // Enhanced tokenize method with improved whitespace handling
     pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
@@ -128,10 +152,7 @@ impl Tokenizer {
             for scanner in &self.scanners {
                 match scanner.scan(current_input) {
                     Ok(Some(token)) => {
-                        // For block scanners with excluded delimiters, the token value length
-                        // doesn't include delimiters, but we need to advance past them
-
-                        // Special handling for block scanner with excluded delimiters
+                        // Special handling for scanners with excluded delimiters or line-based scanners
                         let mut token_len = token.value.len();
 
                         // For block scanners excluding delimiters, need to find the actual consumed length
@@ -141,6 +162,14 @@ impl Tokenizer {
                                 if let Ok(Some(end_pos)) = block_scanner.find_match_end(current_input) {
                                     token_len = end_pos;
                                 }
+                            }
+                        }
+
+                        // For line scanners excluding delimiters, need to calculate correct length
+                        if let ScannerType::Line(line_scanner) = scanner {
+                            if !line_scanner.includes_delimiter() {
+                                // The full match length is the token length plus the delimiter length
+                                token_len = token_len + line_scanner.delimiter().len();
                             }
                         }
 
