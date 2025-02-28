@@ -5,7 +5,7 @@ This document outlines the planned enhancements and features for the rb-tokenize
 ## Short-term Goals (0-3 months)
 
 ### Scanner Enhancements
-- [ ] **Block Scanner**: Add support for recognizing and tokenizing block structures (e.g., code blocks with start/end delimiters)
+- [x] **Block Scanner**: Add support for recognizing and tokenizing block structures (e.g., code blocks with start/end delimiters)
   - Can serve as a foundation for block comments and other block-based structures
   - Handles matching start/end tokens with proper nesting support
   - Provides raw mode option to preserve all content exactly as-is (no escape sequence processing)
@@ -105,18 +105,18 @@ This document outlines the planned enhancements and features for the rb-tokenize
    - Can be specialized for different use cases (code blocks, comments, string literals)
    - Supports raw mode where content is preserved exactly as written (no escape processing)
    - Raw mode is essential for heredocs, raw strings, and code blocks in markdown
-   
+
 2. **Comment Scanner**
    - Purpose: Specialized handling of comments with awareness of different comment styles
    - Example: `//`, `/* */`, `#`, `--`
    - Could be implemented using Block Scanner for block comments and simpler scanners for line comments
-   
+
 3. **Indentation Scanner**
    - Purpose: Handle significant whitespace in languages like Python or YAML
    - Tracks indentation levels and emits indent/dedent tokens
    - Works at the tokenizer level (not parser level) to maintain a cleaner separation of concerns
    - Provides synthetic tokens that make parsing indentation-sensitive languages more straightforward
-   
+
 4. **Delimiter-to-Newline Scanner**
    - Purpose: Recognize statements that start with a specific delimiter and continue until a newline
    - Example: `#include <file>`, `//comment text`, `#define MACRO value`, shell commands
@@ -150,14 +150,14 @@ This document outlines the planned enhancements and features for the rb-tokenize
    - Examples: whitespace detection, newline recognition, identifier patterns, escape sequences
    - Benefits:
      - Consistency across scanners
-     - Centralized language-specific configurations 
+     - Centralized language-specific configurations
      - Easy customization for different language dialects
    - Usage pattern:
      ```rust
      // Register common token identifiers
      tokenizer.register_identifier("whitespace", Box::new(|c| c.is_whitespace()));
      tokenizer.register_regex_identifier("number", r"^\d+(\.\d+)?([eE][-+]?\d+)?");
-     
+
      // Scanners can use these identifiers
      let whitespace_fn = tokenizer.get_identifier("whitespace");
      if whitespace_fn(next_char) { /* handle whitespace */ }
