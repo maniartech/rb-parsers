@@ -1,10 +1,10 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError};
 
-/// `LineScanner` implementation for parsing line-based structures that start with a specific delimiter
+/// `EolScanner` implementation for parsing structures that start with a specific delimiter
 /// and continue until the end of line. This scanner handles structures like line comments,
 /// preprocessor directives, and other line-oriented syntax.
-pub struct LineScanner {
+pub struct EolScanner {
     /// The delimiter that marks the beginning of the line structure
     delimiter: String,
 
@@ -18,8 +18,8 @@ pub struct LineScanner {
     include_delimiter: bool,
 }
 
-impl LineScanner {
-    /// Creates a new line scanner with the specified delimiter and token type
+impl EolScanner {
+    /// Creates a new EOL scanner with the specified delimiter and token type
     pub fn new(
         delimiter: &str,
         token_type: &str,
@@ -63,7 +63,7 @@ impl LineScanner {
     }
 }
 
-impl Scanner for LineScanner {
+impl Scanner for EolScanner {
     fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
         // Check if the input starts with the delimiter
         if !input.starts_with(&self.delimiter) {

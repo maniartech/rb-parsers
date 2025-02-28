@@ -2,7 +2,7 @@ extern crate rb_tokenizer;
 
 use rb_tokenizer::{Tokenizer, TokenizerConfig};
 
-fn get_line_scanner_tokenizer() -> Tokenizer {
+fn get_eol_scanner_tokenizer() -> Tokenizer {
     let config = TokenizerConfig {
         tokenize_whitespace: true,
         continue_on_error: true,
@@ -11,10 +11,10 @@ fn get_line_scanner_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    // Add line scanners for different use cases
+    // Add EOL scanners for different use cases
 
     // Line comments with //
-    tokenizer.add_line_scanner(
+    tokenizer.add_eol_scanner(
         "//",
         "Comment",
         Some("LineComment"),
@@ -22,7 +22,7 @@ fn get_line_scanner_tokenizer() -> Tokenizer {
     );
 
     // Preprocessor directive with #
-    tokenizer.add_line_scanner(
+    tokenizer.add_eol_scanner(
         "#",
         "Preprocessor",
         None,
@@ -30,7 +30,7 @@ fn get_line_scanner_tokenizer() -> Tokenizer {
     );
 
     // Custom directive with @
-    tokenizer.add_line_scanner(
+    tokenizer.add_eol_scanner(
         "@",
         "Directive",
         None,
@@ -52,12 +52,12 @@ fn get_line_scanner_tokenizer() -> Tokenizer {
 }
 
 #[cfg(test)]
-mod line_scanner_tests {
+mod eol_scanner_tests {
     use super::*;
 
     #[test]
     fn test_simple_line_comment() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "// This is a line comment\nvar";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -76,7 +76,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_line_comment_at_end_of_file() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         // Test with comment at the end of file (no trailing newline)
         let input = "var\n// This is a comment at the end";
@@ -95,7 +95,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_preprocessor_directive() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "#define MAX_SIZE 100\nvar = MAX_SIZE;";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -112,7 +112,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_multiple_line_directives() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "// First comment\n#include <file.h>\n@custom directive";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -132,7 +132,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_directive_with_excluded_delimiter() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "@custom directive\nvar = 10;";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -147,7 +147,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_mixed_with_regular_code() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "var = 10; // Define variable\n#ifdef DEBUG\nlog(var);\n#endif";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -169,7 +169,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_line_positions_tracking() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         // Test with multiple line directives to check position tracking
         let input = "// Comment on line 1\n#define on line 2\n@directive on line 3";
@@ -188,7 +188,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_empty_line_directives() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         let input = "//\n#\n@";
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
@@ -206,7 +206,7 @@ mod line_scanner_tests {
 
     #[test]
     fn test_adjacent_line_directives() {
-        let tokenizer = get_line_scanner_tokenizer();
+        let tokenizer = get_eol_scanner_tokenizer();
 
         // Test with adjacent line directives (no whitespace between them)
         let input = "// First comment\n#include <file.h>\n@directive";
@@ -225,8 +225,8 @@ mod line_scanner_tests {
     }
 
     #[test]
-    fn test_line_scanner_priority() {
-        let tokenizer = get_line_scanner_tokenizer();
+    fn test_eol_scanner_priority() {
+        let tokenizer = get_eol_scanner_tokenizer();
 
         // The # should be recognized as a preprocessor directive, not as a symbol
         let input = "#define";
@@ -238,8 +238,8 @@ mod line_scanner_tests {
     }
 
     #[test]
-    fn test_line_scanner_with_special_characters() {
-        let tokenizer = get_line_scanner_tokenizer();
+    fn test_eol_scanner_with_special_characters() {
+        let tokenizer = get_eol_scanner_tokenizer();
 
         // Test with special characters and escape sequences in the line
         let input = "// Comment with special chars: !@#$%^&*()_+{}|:<>?\n@Directive with \"quotes\" and \\escapes";

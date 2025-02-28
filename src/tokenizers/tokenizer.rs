@@ -1,4 +1,4 @@
-use crate::scanners::{self, BlockScanner, LineScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
+use crate::scanners::{self, BlockScanner, EolScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 
 #[derive(Debug, Clone)]
@@ -111,7 +111,7 @@ impl Tokenizer {
         self.scanners.push(scanner);
     }
 
-    /// Adds a line scanner to the tokenizer.
+    /// Adds an End-of-Line scanner to the tokenizer.
     /// This scanner matches content that starts with a specific delimiter and continues until a newline.
     ///
     /// # Arguments
@@ -119,14 +119,14 @@ impl Tokenizer {
     /// * `token_type` - The type of token to create for matched content
     /// * `token_sub_type` - Optional subtype for more specific token categorization
     /// * `include_delimiter` - Whether to include the delimiter in the token value
-    pub fn add_line_scanner(
+    pub fn add_eol_scanner(
         &mut self,
         delimiter: &str,
         token_type: &str,
         token_sub_type: Option<&str>,
         include_delimiter: bool,
     ) {
-        let scanner = ScannerType::Line(LineScanner::new(
+        let scanner = ScannerType::Eol(EolScanner::new(
             delimiter,
             token_type,
             token_sub_type,
@@ -157,7 +157,7 @@ impl Tokenizer {
 
                         // For block scanners excluding delimiters, need to find the actual consumed length
                         if let ScannerType::Block(block_scanner) = scanner {
-                            if !block_scanner.includes_delimiters() {
+                            if (!block_scanner.includes_delimiters()) {
                                 // Calculate full length including delimiters
                                 if let Ok(Some(end_pos)) = block_scanner.find_match_end(current_input) {
                                     token_len = end_pos;
@@ -166,10 +166,10 @@ impl Tokenizer {
                         }
 
                         // For line scanners excluding delimiters, need to calculate correct length
-                        if let ScannerType::Line(line_scanner) = scanner {
-                            if !line_scanner.includes_delimiter() {
+                        if let ScannerType::Eol(eol_scanner) = scanner {
+                            if (!eol_scanner.includes_delimiter()) {
                                 // The full match length is the token length plus the delimiter length
-                                token_len = token_len + line_scanner.delimiter().len();
+                                token_len = token_len + eol_scanner.delimiter().len();
                             }
                         }
 
