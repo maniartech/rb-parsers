@@ -1,4 +1,4 @@
-use crate::scanners::{self, RegexScanner, Scanner, ScannerType, SymbolScanner};
+use crate::scanners::{self, BlockScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 
 #[derive(Debug, Clone)]
@@ -89,6 +89,28 @@ impl Tokenizer {
         self.scanners.push(scanner);
     }
 
+    pub fn add_block_scanner(
+        &mut self,
+        start_delimiter: &str,
+        end_delimiter: &str,
+        token_type: &str,
+        token_sub_type: Option<&str>,
+        allow_nesting: bool,
+        raw_mode: bool,
+        include_delimiters: bool,
+    ) {
+        let scanner = ScannerType::Block(BlockScanner::new(
+            start_delimiter,
+            end_delimiter,
+            token_type,
+            token_sub_type,
+            allow_nesting,
+            raw_mode,
+            include_delimiters,
+        ));
+        self.scanners.push(scanner);
+    }
+
     // Enhanced tokenize method with improved whitespace handling
     pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
@@ -101,13 +123,27 @@ impl Tokenizer {
         while let Some((start, next_char)) = chars.peek().copied() {
             let mut matched = false;
             let current_input = &input[start..];
-            
+
             // Try to match complex scanners first (like strings which can contain whitespace)
             for scanner in &self.scanners {
                 match scanner.scan(current_input) {
                     Ok(Some(token)) => {
-                        let token_len = token.value.len();
-                        
+                        // For block scanners with excluded delimiters, the token value length
+                        // doesn't include delimiters, but we need to advance past them
+
+                        // Special handling for block scanner with excluded delimiters
+                        let mut token_len = token.value.len();
+
+                        // For block scanners excluding delimiters, need to find the actual consumed length
+                        if let ScannerType::Block(block_scanner) = scanner {
+                            if !block_scanner.includes_delimiters() {
+                                // Calculate full length including delimiters
+                                if let Ok(Some(end_pos)) = block_scanner.find_match_end(current_input) {
+                                    token_len = end_pos;
+                                }
+                            }
+                        }
+
                         // Track position if configured
                         let token_with_position = if self.config.track_token_positions {
                             Token {
@@ -118,9 +154,9 @@ impl Tokenizer {
                         } else {
                             token
                         };
-                        
+
                         tokens.push(token_with_position);
-                        
+
                         // Advance the iterator and update positions
                         for _ in 0..token_len {
                             if let Some((_, char)) = chars.next() {
@@ -137,20 +173,20 @@ impl Tokenizer {
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        let error_message = format!(
-                            "Error while scanning input: {:?} at line {} column {}",
-                            e, current_line, current_column
-                        );
-                        eprintln!("{}", error_message);
-                        
-                        let error = TokenizationError::UnrecognizedToken(
-                            format!("Unrecognized token at line {}, column {}: '{}'", 
-                                current_line, current_column, next_char)
-                        );
-                        
-                        errors.push(error);
-                        
+                        // Preserve the original error and add position information
+                        errors.push(e);
+
                         if errors.len() >= self.config.error_tolerance_limit {
+                            return Err(errors);
+                        }
+
+                        // If we encounter an error but want to continue, we need to skip this character
+                        if self.config.continue_on_error {
+                            chars.next();
+                            current_column += 1;
+                            matched = true; // Mark as matched so we don't double-count this error
+                            break;
+                        } else {
                             return Err(errors);
                         }
                     }
@@ -170,15 +206,15 @@ impl Tokenizer {
                             if !ch.is_whitespace() {
                                 break;
                             }
-                            
+
                             // Clone the character to avoid borrowing issues
                             let current_char = *ch;
                             whitespace.push(current_char);
                             has_newline |= current_char == '\n';
-                            
+
                             // Advance the iterator
                             chars.next();
-                            
+
                             if current_char == '\n' {
                                 current_line += 1;
                                 current_column = 1;
@@ -186,7 +222,7 @@ impl Tokenizer {
                                 current_column += 1;
                             }
                         }
-                        
+
                         // Create the whitespace token
                         tokens.push(Token {
                             token_type: String::from("Whitespace"),
@@ -201,10 +237,10 @@ impl Tokenizer {
                             if !ch.is_whitespace() {
                                 break;
                             }
-                            
+
                             let current_char = *ch;
                             chars.next();
-                            
+
                             if current_char == '\n' {
                                 current_line += 1;
                                 current_column = 1;
@@ -215,11 +251,11 @@ impl Tokenizer {
                     }
                 } else {
                     let error = TokenizationError::UnrecognizedToken(
-                        format!("Unrecognized token at line {}, column {}: '{}'", 
+                        format!("Unrecognized token at line {}, column {}: '{}'",
                             current_line, current_column, next_char)
                     );
                     errors.push(error);
-                    
+
                     if self.config.continue_on_error {
                         chars.next();
                         current_column += 1;

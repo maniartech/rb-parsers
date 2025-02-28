@@ -3,6 +3,7 @@ use std::{error::Error, fmt};
 #[derive(Debug, Clone)]
 pub enum TokenizationError {
     UnrecognizedToken(String),
+    UnmatchedBlockDelimiter(String, String),
     // Define additional error types as needed.
 }
 
@@ -11,6 +12,9 @@ impl fmt::Display for TokenizationError {
         match self {
             TokenizationError::UnrecognizedToken(input) => {
                 write!(f, "Unrecognized token: {}", input)
+            },
+            TokenizationError::UnmatchedBlockDelimiter(start, end) => {
+                write!(f, "Unmatched block delimiter: start '{}' missing matching end '{}'", start, end)
             }
         }
     }
