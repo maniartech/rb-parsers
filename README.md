@@ -1,6 +1,6 @@
 # rb-tokenizer
 
-`rb-tokenizer` is a flexible, scanner-based tokenizer written in Rust, designed to make text tokenization customizable and extendable. It supports a wide range of applications, from simple text parsing to complex programming language lexers.
+`rb-tokenizer` is a flexible, rules-based tokenizer written in Rust, designed to make text tokenization customizable and extendable. It supports a wide range of applications, from simple text parsing to complex programming language lexers. You need to add custom scanning rules through various scanner types, such as regular expression and symbol scanners, to tokenize text into meaningful tokens.
 
 ## Features
 
@@ -75,7 +75,7 @@ The `TokenizerConfig` struct provides these configuration options:
 
 ## Scanner Priority and Whitespace Handling
 
-Scanners are scanned in the order they are added, with earlier scanners taking precedence. 
+Scanners are scanned in the order they are added, with earlier scanners taking precedence.
 You can also add scanners with explicit priority:
 
 ```rust
