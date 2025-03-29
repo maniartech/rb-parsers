@@ -23,6 +23,7 @@ impl Default for TokenizerConfig {
 pub struct Tokenizer {
     scanners: Vec<ScannerType>,
     config: TokenizerConfig,
+    last_errors: Option<Vec<TokenizationError>>,
 }
 
 impl Tokenizer {
@@ -30,6 +31,7 @@ impl Tokenizer {
         Tokenizer {
             scanners: Vec::new(),
             config: TokenizerConfig::default(),
+            last_errors: None,
         }
     }
 
@@ -37,6 +39,7 @@ impl Tokenizer {
         Tokenizer {
             scanners: Vec::new(),
             config,
+            last_errors: None,
         }
     }
 
@@ -136,7 +139,7 @@ impl Tokenizer {
     }
 
     // Enhanced tokenize method with improved whitespace handling
-    pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
+    pub fn tokenize(&mut self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
         let mut errors = Vec::new();
 
@@ -297,7 +300,11 @@ impl Tokenizer {
 
         if errors.is_empty() {
             Ok(tokens)
+        } else if self.config.continue_on_error {
+            self.last_errors = Some(errors.clone());
+            Ok(tokens)
         } else {
+            self.last_errors = Some(errors.clone());
             Err(errors)
         }
     }
