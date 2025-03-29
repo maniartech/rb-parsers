@@ -1,7 +1,7 @@
 // filepath: rust-monorepo/tests/integration_tests.rs
 #[cfg(test)]
 mod integration_tests {
-    use rust_parsers::rb_tokenizer::Tokenizer;
+    use rb_tokenizer::Tokenizer;
     use rb_tokenizer::TokenizerConfig;
 
     fn get_json_tokenizer() -> Tokenizer {
