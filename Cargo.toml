@@ -11,3 +11,7 @@ members = [
 ]
 
 [dependencies]
+
+[dev-dependencies]
+rb_tokenizer = { path = "crates/rb_tokenizer" }
+rb_parser = { path = "crates/rb_parser" }

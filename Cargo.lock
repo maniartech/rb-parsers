@@ -27,6 +27,10 @@ dependencies = [
 [[package]]
 name = "rb_parsers"
 version = "0.1.0"
+dependencies = [
+ "rb_parser",
+ "rb_tokenizer",
+]
 
 [[package]]
 name = "rb_tokenizer"
