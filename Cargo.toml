@@ -1,5 +1,5 @@
 [package]
-name = "rust-monorepo"
+name = "rb_parsers"
 version = "0.1.0"
 edition = "2021"
 
