@@ -7,7 +7,7 @@ edition = "2021"
 members = [
     "crates/rb_tokenizer",
     "crates/rb_parser",
-    "crates/another_crate",
+    "crates/visitor",
 ]
 
 [dependencies]
