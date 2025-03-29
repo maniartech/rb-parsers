@@ -27,8 +27,7 @@ fn get_tokenizer() -> Tokenizer {
 
 #[cfg(test)]
 mod tests {
-    use crate::get_tokenizer;
-    use rb_tokenizer::TokenizerConfig;
+    use super::get_tokenizer;
 
     #[test]
     fn it_works() {

@@ -1,106 +1,135 @@
-use rb_tokenizer::utils;
+use rb_tokenizer::{tokens::Token, utils};
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod utils_tests {
     use super::*;
 
-    #[test]
-    fn test_string_helpers() {
-        // Test string trimming functions if they exist
-        let test_str = "  Hello world!  ";
-        if let Some(trimmed) = utils::trim_string(test_str) {
-            assert_eq!(trimmed, "Hello world!");
-        }
-        
-        if let Some(left_trimmed) = utils::trim_left(test_str) {
-            assert_eq!(left_trimmed, "Hello world!  ");
-        }
-        
-        if let Some(right_trimmed) = utils::trim_right(test_str) {
-            assert_eq!(right_trimmed, "  Hello world!");
-        }
+    fn create_test_tokens() -> Vec<Token> {
+        vec![
+            Token {
+                token_type: "IDENTIFIER".to_string(),
+                token_sub_type: Some("VARIABLE".to_string()),
+                value: "myVar".to_string(),
+                line: 1,
+                column: 5,
+            },
+            Token {
+                token_type: "OPERATOR".to_string(),
+                token_sub_type: Some("ASSIGNMENT".to_string()),
+                value: "=".to_string(),
+                line: 1,
+                column: 11,
+            },
+            Token {
+                token_type: "NUMBER".to_string(),
+                token_sub_type: None,
+                value: "42".to_string(),
+                line: 1,
+                column: 13,
+            },
+            Token {
+                token_type: "PUNCTUATION".to_string(),
+                token_sub_type: Some("SEMICOLON".to_string()),
+                value: ";".to_string(),
+                line: 1,
+                column: 15,
+            },
+            Token {
+                token_type: "WHITESPACE".to_string(),
+                token_sub_type: Some("NEWLINE".to_string()),
+                value: "\n".to_string(),
+                line: 1,
+                column: 16,
+            },
+        ]
     }
 
     #[test]
-    fn test_whitespace_detection() {
-        // Test whitespace checking functions
-        if let Some(is_whitespace) = utils::is_whitespace_char(' ') {
-            assert!(is_whitespace);
-        }
-        
-        if let Some(is_whitespace) = utils::is_whitespace_char('\t') {
-            assert!(is_whitespace);
-        }
-        
-        if let Some(is_whitespace) = utils::is_whitespace_char('\n') {
-            assert!(is_whitespace);
-        }
-        
-        if let Some(is_whitespace) = utils::is_whitespace_char('a') {
-            assert!(!is_whitespace);
-        }
+    fn test_pretty_print_tokens() {
+        let tokens = create_test_tokens();
+
+        // Test pretty printing
+        let output = utils::pretty_print_tokens(&tokens);
+
+        // Verify the output contains information about each token
+        assert!(output.contains("Tokens:"));
+        assert!(output.contains("IDENTIFIER"));
+        assert!(output.contains("myVar"));
+        assert!(output.contains("VARIABLE"));
+        assert!(output.contains("OPERATOR"));
+        assert!(output.contains("ASSIGNMENT"));
+        assert!(output.contains("NUMBER"));
+        assert!(output.contains("42"));
+        assert!(output.contains("line 1"));
     }
 
     #[test]
-    fn test_escape_sequences() {
-        // Test escape sequence handling functions
-        if let Some(escaped) = utils::escape_string(r#"Hello\nWorld\t!"#) {
-            assert_eq!(escaped, "Hello\nWorld\t!");
-        }
-        
-        if let Some(unescaped) = utils::unescape_string("Hello\nWorld\t!") {
-            assert_eq!(unescaped, r#"Hello\nWorld\t!"#);
-        }
+    fn test_token_summary() {
+        let token = Token {
+            token_type: "STRING".to_string(),
+            token_sub_type: Some("DOUBLE_QUOTED".to_string()),
+            value: "Hello\nWorld".to_string(),
+            line: 2,
+            column: 3,
+        };
+
+        let summary = utils::token_summary(&token);
+
+        // Verify the summary format
+        assert!(summary.contains("STRING"));
+        assert!(summary.contains("DOUBLE_QUOTED"));
+        assert!(summary.contains("Hello\\nWorld")); // Newlines should be escaped
     }
 
     #[test]
-    fn test_string_position_utilities() {
-        // Test functions that work with line/column positions in strings
-        let test_str = "Line 1\nLine 2\nLine 3";
-        
-        if let Some(line_count) = utils::count_lines(test_str) {
-            assert_eq!(line_count, 3);
+    fn test_compare_tokens() {
+        let expected = create_test_tokens();
+        let mut actual = expected.clone();
+
+        // Modify one token in the actual result to create a difference
+        if !actual.is_empty() {
+            actual[0].value = "differentVar".to_string();
         }
-        
-        if let Some((line, col)) = utils::position_at_index(test_str, 8) {
-            assert_eq!(line, 1);  // 0-based
-            assert_eq!(col, 1);   // 0-based
-        }
-        
-        if let Some(index) = utils::index_at_position(test_str, 1, 1) {
-            assert_eq!(index, 8);
-        }
+
+        // Get comparison output
+        let comparison = utils::compare_tokens(&expected, &actual);
+
+        // Verify comparison contains all tokens
+        assert!(comparison.contains("Token Comparison:"));
+        assert!(comparison.contains("Expected"));
+        assert!(comparison.contains("Actual"));
+        assert!(comparison.contains("myVar"));
+        assert!(comparison.contains("differentVar"));
+        assert!(comparison.contains("✗")); // Should show a difference marker
+        assert!(comparison.contains("✓")); // Should show some matches too
     }
 
     #[test]
-    fn test_character_classification() {
-        // Test character type classification functions
-        if let Some(is_digit) = utils::is_digit('5') {
-            assert!(is_digit);
-        }
-        
-        if let Some(is_digit) = utils::is_digit('a') {
-            assert!(!is_digit);
-        }
-        
-        if let Some(is_alpha) = utils::is_alpha('z') {
-            assert!(is_alpha);
-        }
-        
-        if let Some(is_alpha) = utils::is_alpha('9') {
-            assert!(!is_alpha);
-        }
-        
-        if let Some(is_alphanumeric) = utils::is_alphanumeric('A') {
-            assert!(is_alphanumeric);
-        }
-        
-        if let Some(is_alphanumeric) = utils::is_alphanumeric('7') {
-            assert!(is_alphanumeric);
-        }
-        
-        if let Some(is_alphanumeric) = utils::is_alphanumeric('_') {
-            assert!(!is_alphanumeric);
-        }
+    fn test_visualize_token_positions() {
+        let input = "let myVar = 42;\n";
+        let tokens = create_test_tokens();
+
+        let visualization = utils::visualize_token_positions(input, &tokens);
+
+        // Verify visualization format
+        assert!(visualization.contains("let myVar = 42;"));
+        assert!(visualization.contains("^")); // Should contain position markers
+        assert!(visualization.contains("1 | ")); // Should show line numbers
+    }
+
+    #[test]
+    fn test_analyze_tokens() {
+        let tokens = create_test_tokens();
+
+        let analysis = utils::analyze_tokens(&tokens);
+
+        // Verify analysis content
+        assert!(analysis.contains("Token Analysis:"));
+        assert!(analysis.contains("Total Tokens: 5"));
+        assert!(analysis.contains("Token Type Distribution:"));
+        assert!(analysis.contains("IDENTIFIER"));
+        assert!(analysis.contains("NUMBER"));
+        assert!(analysis.contains("Potential Issues:"));
     }
 }

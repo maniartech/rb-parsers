@@ -1,74 +1,98 @@
 use rb_tokenizer::tokens::TokenizationError;
+use std::error::Error;
 
 #[cfg(test)]
 mod error_tests {
     use super::*;
 
     #[test]
-    fn test_error_creation_and_accessors() {
-        let error = TokenizationError::new("Unexpected token", 5, 10);
+    fn test_error_creation() {
+        let error = TokenizationError::UnrecognizedToken("Unexpected token".to_string());
 
-        assert_eq!(error.message, "Unexpected token");
-        assert_eq!(error.line, 5);
-        assert_eq!(error.column, 10);
+        // Verify the error is created correctly
+        match error {
+            TokenizationError::UnrecognizedToken(msg) => {
+                assert_eq!(msg, "Unexpected token");
+            },
+            _ => panic!("Expected UnrecognizedToken variant")
+        }
     }
 
     #[test]
     fn test_error_debug_output() {
-        let error = TokenizationError::new("Unclosed string", 7, 15);
+        let error = TokenizationError::UnrecognizedToken("Unclosed string".to_string());
 
         let debug_output = format!("{:?}", error);
 
-        // Check that debug output contains all relevant information
+        // Check that debug output contains relevant information
+        assert!(debug_output.contains("UnrecognizedToken"));
         assert!(debug_output.contains("Unclosed string"));
-        assert!(debug_output.contains("7"));
-        assert!(debug_output.contains("15"));
     }
 
     #[test]
     fn test_error_display_output() {
-        let error = TokenizationError::new("Invalid character", 3, 8);
+        let error = TokenizationError::UnrecognizedToken("Invalid character".to_string());
 
         let display_output = format!("{}", error);
 
         // Check that display output is formatted as expected
+        assert!(display_output.contains("Unrecognized token"));
         assert!(display_output.contains("Invalid character"));
-        assert!(display_output.contains("line 3"));
-        assert!(display_output.contains("column 8"));
     }
 
     #[test]
-    fn test_error_equality() {
-        let error1 = TokenizationError::new("Syntax error", 10, 20);
-        let error2 = TokenizationError::new("Syntax error", 10, 20);
-        let different_error = TokenizationError::new("Different error", 10, 20);
+    fn test_error_variants_distinct() {
+        let error1 = TokenizationError::UnrecognizedToken("Syntax error".to_string());
+        let error2 = TokenizationError::UnrecognizedToken("Syntax error".to_string());
+        let different_error = TokenizationError::UnrecognizedToken("Different error".to_string());
+        let block_error = TokenizationError::UnmatchedBlockDelimiter("{{".to_string(), "}}".to_string());
 
-        // Test equality
-        assert_eq!(error1, error2);
-        assert_ne!(error1, different_error);
-    }
+        // Check variant type and content instead of equality
+        match (&error1, &error2) {
+            (TokenizationError::UnrecognizedToken(msg1), TokenizationError::UnrecognizedToken(msg2)) => {
+                assert_eq!(msg1, msg2, "Messages should be equal");
+            },
+            _ => panic!("Both should be UnrecognizedToken variant")
+        }
 
-    #[test]
-    fn test_error_with_zero_position() {
-        let error = TokenizationError::new("Error at start", 0, 0);
+        // Check that different messages are reflected
+        match (&error1, &different_error) {
+            (TokenizationError::UnrecognizedToken(msg1), TokenizationError::UnrecognizedToken(msg2)) => {
+                assert_ne!(msg1, msg2, "Messages should be different");
+            },
+            _ => panic!("Both should be UnrecognizedToken variant")
+        }
 
-        assert_eq!(error.line, 0);
-        assert_eq!(error.column, 0);
-
-        let display_output = format!("{}", error);
-        assert!(display_output.contains("line 0"));
-        assert!(display_output.contains("column 0"));
+        // Check that different variants are reflected
+        if let TokenizationError::UnmatchedBlockDelimiter(_, _) = block_error {
+            // This is correct
+        } else {
+            panic!("Expected UnmatchedBlockDelimiter variant");
+        }
     }
 
     #[test]
     fn test_error_clone() {
-        let original = TokenizationError::new("Original error", 100, 200);
+        let original = TokenizationError::UnrecognizedToken("Original error".to_string());
         let cloned = original.clone();
 
-        // Verify the cloned error equals the original
-        assert_eq!(cloned.message, "Original error");
-        assert_eq!(cloned.line, 100);
-        assert_eq!(cloned.column, 200);
-        assert_eq!(original, cloned);
+        // Verify the cloned error matches the original
+        match (original, cloned) {
+            (TokenizationError::UnrecognizedToken(msg1), TokenizationError::UnrecognizedToken(msg2)) => {
+                assert_eq!(msg1, msg2, "Cloned message should match original");
+            },
+            _ => panic!("Both should be UnrecognizedToken variant")
+        }
+    }
+
+    #[test]
+    fn test_error_trait_implementation() {
+        let error = TokenizationError::UnrecognizedToken("Test error".to_string());
+
+        // Test that our error implements the Error trait
+        let error_trait_object: &dyn Error = &error;
+        let description = error_trait_object.to_string();
+
+        assert!(description.contains("Unrecognized token"));
     }
 }

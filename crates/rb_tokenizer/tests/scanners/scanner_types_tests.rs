@@ -1,6 +1,9 @@
 use rb_tokenizer::{
-    scanners::scanner_types::{Position, ScanResult},
     tokens::{Token, TokenizationError},
+    scanners::scanner_types::{ScannerType, CallbackScanner},
+    scanners::symbol_scanner::SymbolScanner,
+    scanners::regex_scanner::RegexScanner,
+    scanners::scanner::Scanner,
 };
 
 #[cfg(test)]
@@ -8,124 +11,101 @@ mod scanner_types_tests {
     use super::*;
 
     #[test]
-    fn test_position() {
-        let pos = Position::new(5, 10);
+    fn test_scanner_type_symbol() {
+        let symbol_scanner = SymbolScanner::new("if", "KEYWORD", None);
+        let scanner_type = ScannerType::Symbol(symbol_scanner);
 
-        assert_eq!(pos.line, 5);
-        assert_eq!(pos.column, 10);
-
-        // Test helper methods if available
-        let advanced_pos = pos.advance_column(3);
-        assert_eq!(advanced_pos.line, 5);
-        assert_eq!(advanced_pos.column, 13);
-
-        let new_line_pos = pos.advance_line();
-        assert_eq!(new_line_pos.line, 6);
-        assert_eq!(new_line_pos.column, 0); // Column resets to 0 for a new line
+        // Test as a scanner
+        let result = scanner_type.scan("if condition");
+        assert!(result.is_ok());
+        let token_option = result.unwrap();
+        assert!(token_option.is_some());
+        let token = token_option.unwrap();
+        assert_eq!(token.token_type, "KEYWORD");
+        assert_eq!(token.value, "if");
     }
 
     #[test]
-    fn test_scan_result() {
-        // Test Ok variant with Some token
-        let token = Token {
-            token_type: "TEST".to_string(),
-            token_sub_type: None,
-            value: "test_value".to_string(),
-            line: 1,
-            column: 2,
-        };
+    fn test_scanner_type_regex() {
+        let regex_scanner = RegexScanner::new(r"^\d+", "NUMBER", None);
+        let scanner_type = ScannerType::Regex(regex_scanner);
 
-        let ok_some_result: ScanResult = Ok(Some(token.clone()));
-
-        if let Ok(Some(t)) = &ok_some_result {
-            assert_eq!(t.token_type, "TEST");
-            assert_eq!(t.value, "test_value");
-            assert_eq!(t.line, 1);
-            assert_eq!(t.column, 2);
-        } else {
-            panic!("Expected Ok(Some(token))");
-        }
-
-        // Test Ok variant with None
-        let ok_none_result: ScanResult = Ok(None);
-
-        if let Ok(None) = &ok_none_result {
-            // This is the expected case
-        } else {
-            panic!("Expected Ok(None)");
-        }
-
-        // Test Err variant
-        let error = TokenizationError::new("Test error", 3, 4);
-        let err_result: ScanResult = Err(error);
-
-        if let Err(e) = &err_result {
-            assert_eq!(e.message, "Test error");
-            assert_eq!(e.line, 3);
-            assert_eq!(e.column, 4);
-        } else {
-            panic!("Expected Err(error)");
-        }
+        // Test as a scanner
+        let result = scanner_type.scan("123 abc");
+        assert!(result.is_ok());
+        let token_option = result.unwrap();
+        assert!(token_option.is_some());
+        let token = token_option.unwrap();
+        assert_eq!(token.token_type, "NUMBER");
+        assert_eq!(token.value, "123");
     }
 
     #[test]
-    fn test_scan_result_combinators() {
-        // Create tokens and errors
-        let token1 = Token {
-            token_type: "TYPE1".to_string(),
-            token_sub_type: None,
-            value: "value1".to_string(),
-            line: 1,
-            column: 0,
-        };
+    fn test_scanner_type_closure() {
+        struct TestCallbackScanner;
 
-        let token2 = Token {
-            token_type: "TYPE2".to_string(),
-            token_sub_type: None,
-            value: "value2".to_string(),
-            line: 2,
-            column: 5,
-        };
-
-        let error = TokenizationError::new("Test error", 3, 10);
-
-        // Test and_then (if available)
-        let result1: ScanResult = Ok(Some(token1.clone()));
-        let result2: ScanResult = Ok(Some(token2.clone()));
-        let err_result: ScanResult = Err(error.clone());
-
-        // Test Result's map method
-        let mapped_result = result1.map(|opt_token| {
-            opt_token.map(|mut token| {
-                token.token_sub_type = Some("MAPPED".to_string());
-                token
-            })
-        });
-
-        if let Ok(Some(t)) = mapped_result {
-            assert_eq!(t.token_sub_type, Some("MAPPED".to_string()));
-        } else {
-            panic!("Expected Ok(Some(token)) after mapping");
+        impl CallbackScanner for TestCallbackScanner {
+            fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+                if input.starts_with("test") {
+                    Ok(Some(Token {
+                        token_type: "TEST".to_string(),
+                        token_sub_type: None,
+                        value: "test".to_string(),
+                        line: 0,
+                        column: 0,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
         }
 
-        // Test Result's unwrap_or
-        let unwrap_or_none = Ok::<Option<Token>, TokenizationError>(None)
-            .unwrap_or(None);
-        assert!(unwrap_or_none.is_none());
+        let callback_scanner = Box::new(TestCallbackScanner);
+        let scanner_type = ScannerType::Callback(callback_scanner);
 
-        let unwrap_or_err = err_result.clone()
-            .unwrap_or(Some(token2.clone()));
-        assert!(unwrap_or_err.is_some());
-        assert_eq!(unwrap_or_err.unwrap().token_type, "TYPE2");
+        // Test with matching input
+        let result = scanner_type.scan("test_input");
+        assert!(result.is_ok());
+        let token_option = result.unwrap();
+        assert!(token_option.is_some());
+        let token = token_option.unwrap();
+        assert_eq!(token.token_type, "TEST");
+        assert_eq!(token.value, "test");
 
-        // Test Result's or_else (if chaining is important)
-        let or_else_result = err_result
-            .or_else(|_| Ok(Some(token1.clone())));
+        // Test with non-matching input
+        let result = scanner_type.scan("other input");
+        assert!(result.is_ok());
+        let token_option = result.unwrap();
+        assert!(token_option.is_none());
+    }
 
-        if let Ok(Some(t)) = or_else_result {
-            assert_eq!(t.token_type, "TYPE1");
-        } else {
-            panic!("Expected Ok(Some(token)) after or_else");
+    #[test]
+    fn test_scanner_type_error_handling() {
+        struct ErrorCallbackScanner;
+
+        impl CallbackScanner for ErrorCallbackScanner {
+            fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+                if input.starts_with("error") {
+                    Err(TokenizationError::UnrecognizedToken("Test error".to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+
+        let error_scanner = Box::new(ErrorCallbackScanner);
+        let scanner_type = ScannerType::Callback(error_scanner);
+
+        // Test with error-inducing input
+        let result = scanner_type.scan("error_case");
+        assert!(result.is_err());
+
+        // Check the error type
+        match result.err().unwrap() {
+            TokenizationError::UnrecognizedToken(msg) => {
+                assert_eq!(msg, "Test error");
+            },
+            _ => panic!("Expected UnrecognizedToken error")
         }
     }
 }

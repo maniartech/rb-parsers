@@ -11,7 +11,7 @@ mod config_tests {
 
         // Test default values
         assert!(!config.tokenize_whitespace, "Default tokenize_whitespace should be false");
-        assert!(config.continue_on_error, "Default continue_on_error should be true");
+        assert!(!config.continue_on_error, "Default continue_on_error should be false");
         assert_eq!(config.error_tolerance_limit, 10, "Default error_tolerance_limit should be 10");
         assert!(config.track_token_positions, "Default track_token_positions should be true");
     }
@@ -59,16 +59,16 @@ mod config_tests {
 
         // Use the with_options method to set multiple options at once
         tokenizer.with_options(
-            Some(true),   // tokenize_whitespace
-            None,         // continue_on_error (unchanged)
-            Some(15),     // error_tolerance_limit
-            Some(false)   // track_token_positions
+            Some(false),   // continue_on_error
+            Some(true),    // tokenize_whitespace
+            Some(15),      // error_tolerance_limit
+            Some(false)    // track_token_positions
         );
 
         let config = tokenizer.config();
 
         assert!(config.tokenize_whitespace);
-        assert!(config.continue_on_error, "Should remain unchanged");
+        assert!(!config.continue_on_error);
         assert_eq!(config.error_tolerance_limit, 15);
         assert!(!config.track_token_positions);
     }
