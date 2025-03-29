@@ -77,6 +77,7 @@ fn get_tokenizer() -> Tokenizer {
 #[cfg(test)]
 mod tests {
     use crate::get_tokenizer;
+    use rb_tokenizer::TokenizerConfig;
 
     #[test]
     fn it_works() {
@@ -84,16 +85,60 @@ mod tests {
         let result = tokenizer.tokenize(r"[1, 2, 3, 4] |map: RAND() * $1 |filter: $1 % 2 == 0");
         println!("{:?}", result);
     }
-    
+
     #[test]
     fn test_error_handling() {
-        let tokenizer = get_tokenizer();
+        // First test with continue_on_error = false
+        let mut strict_tokenizer = get_tokenizer();
+
+        // Use the new fluent API instead of directly manipulating the config
+        strict_tokenizer.set_continue_on_error(false);
+
         // Introduce an invalid token (@ is not defined in our scanners)
-        let result = tokenizer.tokenize(r"[1, 2, @, 4]");
-        assert!(result.is_err(), "Should return an error for invalid token");
-        if let Err(errors) = result {
-            println!("Tokenization errors: {:?}", errors);
-            assert!(!errors.is_empty(), "Should contain at least one error");
+        let strict_result = strict_tokenizer.tokenize(r"[1, 2, @, 4]");
+        assert!(strict_result.is_err(), "Should return an error in strict mode for invalid token");
+
+        if let Err(errors) = strict_result {
+            println!("Expected errors in strict mode: {:?}", errors);
+            assert!(!errors.is_empty(), "Should have at least one error");
+        }
+
+        // Now test with continue_on_error = true (default for get_tokenizer())
+        let tolerant_tokenizer = get_tokenizer();
+        let tolerant_result = tolerant_tokenizer.tokenize(r"[1, 2, @, 4]");
+
+        // With continue_on_error=true, it should return Ok with tokens
+        assert!(tolerant_result.is_ok(), "Should return Ok with tokens in tolerant mode");
+
+        // But it should also store the errors in last_errors
+        let errors = tolerant_tokenizer.last_errors();
+        assert!(errors.is_some(), "Should have stored errors in last_errors");
+
+        if let Some(error_list) = errors {
+            println!("Errors in tolerant mode: {:?}", error_list);
+            assert!(!error_list.is_empty(), "Should have at least one error");
+            assert!(error_list[0].to_string().contains("@"),
+                   "Error should mention the problematic character @");
+        }
+
+        // Check that we got the valid tokens even with errors
+        if let Ok(tokens) = tolerant_result {
+            println!("Tokens parsed in tolerant mode: {:?}", tokens);
+
+            // Verify we got the valid tokens around the error
+            let token_values: Vec<_> = tokens.iter()
+                .filter(|t| t.token_type == "Number" || t.token_type == "Bracket" || t.token_type == "Comma")
+                .map(|t| &t.value)
+                .collect();
+
+            println!("Token values: {:?}", token_values);
+
+            // We should have [, 1, ,, 2, ,, 4, ]
+            assert!(token_values.contains(&&"[".to_string()), "Should have opening bracket");
+            assert!(token_values.contains(&&"1".to_string()), "Should have first number");
+            assert!(token_values.contains(&&"2".to_string()), "Should have second number");
+            assert!(token_values.contains(&&"4".to_string()), "Should have last number");
+            assert!(token_values.contains(&&"]".to_string()), "Should have closing bracket");
         }
     }
 }

@@ -138,7 +138,15 @@ mod block_scanner_tests {
 
     #[test]
     fn test_unmatched_block_delimiter() {
-        let tokenizer = get_block_scanner_tokenizer();
+        // Create a strict tokenizer for this test
+        let mut tokenizer = get_block_scanner_tokenizer();
+
+        // Modify the config to use strict error handling
+        let strict_config = TokenizerConfig {
+            continue_on_error: false,
+            ..tokenizer.config().clone()
+        };
+        *tokenizer.config_mut() = strict_config;
 
         // Missing closing comment delimiter
         let input = "/* This comment is not closed properly var";

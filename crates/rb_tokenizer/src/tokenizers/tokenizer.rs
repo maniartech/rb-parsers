@@ -1,5 +1,6 @@
 use crate::scanners::{self, BlockScanner, EolScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
+use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
 pub struct TokenizerConfig {
@@ -23,7 +24,7 @@ impl Default for TokenizerConfig {
 pub struct Tokenizer {
     scanners: Vec<ScannerType>,
     config: TokenizerConfig,
-    last_errors: Option<Vec<TokenizationError>>,
+    last_errors: RefCell<Option<Vec<TokenizationError>>>,
 }
 
 impl Tokenizer {
@@ -31,7 +32,7 @@ impl Tokenizer {
         Tokenizer {
             scanners: Vec::new(),
             config: TokenizerConfig::default(),
-            last_errors: None,
+            last_errors: RefCell::new(None),
         }
     }
 
@@ -39,7 +40,7 @@ impl Tokenizer {
         Tokenizer {
             scanners: Vec::new(),
             config,
-            last_errors: None,
+            last_errors: RefCell::new(None),
         }
     }
 
@@ -49,6 +50,11 @@ impl Tokenizer {
 
     pub fn config_mut(&mut self) -> &mut TokenizerConfig {
         &mut self.config
+    }
+
+    /// Returns any errors encountered during the last tokenization operation
+    pub fn last_errors(&self) -> Option<Vec<TokenizationError>> {
+        self.last_errors.borrow().clone()
     }
 
     pub fn add_scanner(&mut self, scanner: Box<dyn scanners::Scanner>) {
@@ -139,7 +145,7 @@ impl Tokenizer {
     }
 
     // Enhanced tokenize method with improved whitespace handling
-    pub fn tokenize(&mut self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
+    pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
         let mut tokens = Vec::new();
         let mut errors = Vec::new();
 
@@ -209,6 +215,7 @@ impl Tokenizer {
                         errors.push(e);
 
                         if errors.len() >= self.config.error_tolerance_limit {
+                            *self.last_errors.borrow_mut() = Some(errors.clone());
                             return Err(errors);
                         }
 
@@ -219,6 +226,7 @@ impl Tokenizer {
                             matched = true; // Mark as matched so we don't double-count this error
                             break;
                         } else {
+                            *self.last_errors.borrow_mut() = Some(errors.clone());
                             return Err(errors);
                         }
                     }
@@ -299,13 +307,64 @@ impl Tokenizer {
         }
 
         if errors.is_empty() {
+            *self.last_errors.borrow_mut() = None;
             Ok(tokens)
         } else if self.config.continue_on_error {
-            self.last_errors = Some(errors.clone());
+            *self.last_errors.borrow_mut() = Some(errors.clone());
             Ok(tokens)
         } else {
-            self.last_errors = Some(errors.clone());
+            *self.last_errors.borrow_mut() = Some(errors.clone());
             Err(errors)
         }
+    }
+
+    /// Sets whether the tokenizer should continue on errors
+    pub fn set_continue_on_error(&mut self, value: bool) -> &mut Self {
+        self.config.continue_on_error = value;
+        self
+    }
+
+    /// Sets whether the tokenizer should tokenize whitespace
+    pub fn set_tokenize_whitespace(&mut self, value: bool) -> &mut Self {
+        self.config.tokenize_whitespace = value;
+        self
+    }
+
+    /// Sets the maximum number of errors before tokenization fails
+    pub fn set_error_tolerance_limit(&mut self, value: usize) -> &mut Self {
+        self.config.error_tolerance_limit = value;
+        self
+    }
+
+    /// Sets whether the tokenizer should track token positions
+    pub fn set_track_token_positions(&mut self, value: bool) -> &mut Self {
+        self.config.track_token_positions = value;
+        self
+    }
+
+    /// Updates the tokenizer configuration with the provided values
+    pub fn with_options(&mut self,
+        continue_on_error: Option<bool>,
+        tokenize_whitespace: Option<bool>,
+        error_tolerance_limit: Option<usize>,
+        track_token_positions: Option<bool>
+    ) -> &mut Self {
+        if let Some(val) = continue_on_error {
+            self.config.continue_on_error = val;
+        }
+
+        if let Some(val) = tokenize_whitespace {
+            self.config.tokenize_whitespace = val;
+        }
+
+        if let Some(val) = error_tolerance_limit {
+            self.config.error_tolerance_limit = val;
+        }
+
+        if let Some(val) = track_token_positions {
+            self.config.track_token_positions = val;
+        }
+
+        self
     }
 }

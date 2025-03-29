@@ -185,16 +185,17 @@ mod ejs_tests {
     fn test_error_handling() {
         // Test strict mode first
         let mut strict_tokenizer = get_ejs_tokenizer();
-        let strict_config = TokenizerConfig {
-            continue_on_error: false,
-            error_tolerance_limit: 1,
-            ..strict_tokenizer.config().clone()
-        };
-        println!("Strict mode config: {:?}", strict_config);
-        *strict_tokenizer.config_mut() = strict_config;
+
+        // Configure tokenizer using the fluent API
+        strict_tokenizer
+            .set_continue_on_error(false)
+            .set_error_tolerance_limit(1);
+
+        println!("Strict mode config: {:?}", strict_tokenizer.config());
 
         // Template with unclosed tag
         let invalid_template = "<p><%= unclosedTag </p>";
+
         println!("\nTesting strict mode with template: {}", invalid_template);
         let result = strict_tokenizer.tokenize(invalid_template);
         println!("Strict mode result: {:?}", result);
@@ -205,20 +206,27 @@ mod ejs_tests {
 
         // Now test tolerant mode with a more forgiving configuration
         let mut tolerant_tokenizer = get_ejs_tokenizer();
-        let tolerant_config = TokenizerConfig {
-            continue_on_error: true,
-            error_tolerance_limit: 100,  // High limit to ensure we keep going
-            tokenize_whitespace: true,
-            track_token_positions: true,
-        };
-        println!("\nTolerant mode config: {:?}", tolerant_config);
-        *tolerant_tokenizer.config_mut() = tolerant_config;
+
+        // Configure using the more concise with_options method
+        tolerant_tokenizer.with_options(
+            Some(true),              // continue_on_error
+            Some(true),              // tokenize_whitespace
+            Some(100),               // error_tolerance_limit
+            Some(true)               // track_token_positions
+        );
+
+        println!("\nTolerant mode config: {:?}", tolerant_tokenizer.config());
 
         // Test with a simpler template first
         let simple_template = "<div><%# unclosed";
         println!("\nTesting tolerant mode with simple template: {}", simple_template);
         let simple_result = tolerant_tokenizer.tokenize(simple_template);
         println!("Simple template result: {:?}", simple_result);
+
+        // Verify that errors were stored in last_errors
+        let simple_errors = tolerant_tokenizer.last_errors();
+        assert!(simple_errors.is_some(), "Should have stored errors in tolerant mode");
+        println!("Errors from simple template: {:?}", simple_errors);
 
         // Test with the full template that has multiple issues
         let template_with_errors = r#"<div>
@@ -234,6 +242,17 @@ mod ejs_tests {
         println!("Tolerant mode result: {:?}", result);
 
         assert!(result.is_ok(), "Should return Ok with tokens in tolerant mode");
+
+        // Verify that errors were stored for the complex template
+        let complex_errors = tolerant_tokenizer.last_errors();
+        assert!(complex_errors.is_some(), "Should have stored errors for complex template");
+        if let Some(errors) = &complex_errors {
+            println!("\nFound {} errors in tolerant mode:", errors.len());
+            assert!(!errors.is_empty(), "Should have stored at least one error");
+            for (i, err) in errors.iter().enumerate() {
+                println!("Error {}: {:?}", i, err);
+            }
+        }
 
         if let Ok(tokens) = result {
             println!("\nReceived {} tokens in tolerant mode:", tokens.len());
