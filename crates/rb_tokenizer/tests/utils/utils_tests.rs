@@ -1,5 +1,4 @@
 use rb_tokenizer::{tokens::Token, utils};
-use std::collections::HashMap;
 
 #[cfg(test)]
 mod utils_tests {

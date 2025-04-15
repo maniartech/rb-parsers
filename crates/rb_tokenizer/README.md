@@ -11,6 +11,7 @@
 - **Configurable Behavior**: Control whitespace handling, error tolerance, position tracking, and more.
 - **Robust Error Handling**: Configure how the tokenizer deals with unrecognized tokens.
 - **Advanced Whitespace Management**: Properly handles whitespace in strings and other specialized tokens.
+- **Flexible Escape Sequence Handling**: Comprehensive support for various escape sequence styles across different languages.
 
 ## Getting Started
 
@@ -100,6 +101,49 @@ The tokenizer provides two modes of whitespace handling:
 - When `tokenize_whitespace` is `true`, whitespace is treated as a separate token.
 
 String literals and other tokens that need to preserve their internal whitespace handle this within their own scanner implementation, making the behavior consistent and predictable.
+
+## Enhanced Escape Sequence Handling
+
+The BlockScanner includes comprehensive support for handling escape sequences in various formats. This makes it easy to tokenize string literals and other content with complex escaping rules from different programming languages.
+
+### Escape Rule Types
+
+The BlockScanner supports four types of escape rules:
+
+1. **Simple Escapes**: Traditional character escaping with a prefix like `\n` or `\t`
+2. **Named Escapes**: Named sequences like HTML entities (`&lt;`, `&amp;`)
+3. **Pattern Escapes**: Regular expression-based escapes like `\uXXXX` Unicode escapes
+4. **Balanced Escapes**: Nested structures like `${...}` in template literals or `#{...}` in Ruby
+
+### Using Escape Rules
+
+You can configure a BlockScanner with custom escape rules:
+
+```rust
+let mut string_scanner = BlockScanner::new(
+    "\"", "\"", "String", None, false, false, true
+);
+
+// Add a simple backslash escape
+string_scanner.add_simple_escape('\\');
+
+// Add HTML-style named entities
+string_scanner.add_named_escape('&', ';', 10);
+
+// Add Unicode escape sequence pattern
+string_scanner.add_pattern_escape(r"\\u[0-9a-fA-F]{4}").unwrap();
+
+// Add template expression escapes
+string_scanner.add_balanced_escape("${", "}", true);
+
+// Enable escape sequence transformation
+string_scanner.set_transform_escapes(true);
+string_scanner.add_escape_mapping("n", '\n');
+string_scanner.add_escape_mapping("t", '\t');
+string_scanner.add_escape_mapping("amp", '&');
+```
+
+This flexible system allows you to tokenize content from virtually any programming language or templating system with their unique escaping rules.
 
 ## Examples
 

@@ -49,7 +49,7 @@ mod error_handling_tests {
     #[test]
     fn test_tolerant_mode_continues_after_errors() {
         // Create tokenizer with tolerant mode (continue_on_error = true)
-        let tokenizer = create_test_tokenizer(true, 5);
+        let tokenizer = create_test_tokenizer(true, 10);
 
         // Input with multiple problems
         let input = "Text <<block1>> more <<unclosed1 and <<unclosed2 and some <<good>> block";
@@ -128,7 +128,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_error_reset_between_tokenizations() {
-        let mut tokenizer = create_test_tokenizer(true, 10);
+        let tokenizer = create_test_tokenizer(true, 10);
 
         // First input with errors
         let input1 = "Some text <<unclosed";
