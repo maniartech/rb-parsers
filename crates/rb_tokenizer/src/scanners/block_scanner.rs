@@ -302,6 +302,7 @@ impl BlockScanner {
         ))
     }
 
+
     /// Process escape sequences in the token value
     fn process_escape_sequences(&self, input: &str) -> String {
         if !self.transform_escapes || self.raw_mode || self.escape_rules.is_empty() {
@@ -309,69 +310,67 @@ impl BlockScanner {
         }
 
         let mut result = String::with_capacity(input.len());
-        let mut position = 0;
+        let mut chars = input.chars().peekable();
 
-        while position < input.len() {
-            let mut escape_handled = false;
-
-            // Check for escape sequences
-            for rule in &self.escape_rules {
-                if let Some(escape_len) = rule.try_match(input, position) {
-                    match rule {
-                        EscapeRule::Simple { escape_char: _ } => {
-                            if position + 1 < input.len() {
-                                // Get the character after the escape char
-                                if let Some(c) = input[position+1..position+2].chars().next() {
-                                    let escaped_char = c.to_string();
-                                    
-                                    // Look up replacement in escape_map or use the character as is
-                                    if let Some(&replacement) = self.escape_map.get(&escaped_char) {
-                                        result.push(replacement);
-                                    } else {
-                                        // If no mapping, just use the original character (important for quotes)
-                                        result.push(c);
-                                    }
-                                }
-                            }
-                        },
-
-                        EscapeRule::Named { start_char: _, end_char: _, max_length: _ } => {
-                            // Extract the content between delimiters
-                            if escape_len > 2 { // Must have at least one character between delimiters
-                                let entity = &input[position+1..position+escape_len-1];
-
-                                // Look up in escape_map
-                                if let Some(&replacement) = self.escape_map.get(entity) {
-                                    result.push(replacement);
-                                } else {
-                                    // If no mapping, preserve as is
-                                    result.push_str(&input[position..position+escape_len]);
-                                }
-                            } else {
-                                // Invalid entity, keep as is
-                                result.push_str(&input[position..position+escape_len]);
-                            }
-                        },
-
-                        // For Pattern and Balanced, we currently just preserve the matched text
-                        // This could be extended to handle specific transformations
-                        _ => {
-                            result.push_str(&input[position..position+escape_len]);
+        while let Some(c) = chars.next() {
+            // Handle simple escapes
+            if let Some(EscapeRule::Simple { escape_char }) = self.escape_rules.iter().find(|r| matches!(r, EscapeRule::Simple { .. })) {
+                if c == *escape_char {
+                    if let Some(&next_c) = chars.peek() {
+                        let escaped = next_c.to_string();
+                        if let Some(&replacement) = self.escape_map.get(&escaped) {
+                            result.push(replacement);
+                        } else {
+                            result.push(next_c);
                         }
+                        chars.next();
                     }
-
-                    position += escape_len;
-                    escape_handled = true;
-                    break;
+                    continue;
                 }
             }
 
-            // If no escape sequence was matched, add the current character
-            if !escape_handled {
-                let c = input[position..].chars().next().unwrap();
-                result.push(c);
-                position += c.len_utf8();
+            // Handle named escapes (e.g., &lt;)
+            if let Some(EscapeRule::Named { start_char, end_char, max_length }) = self.escape_rules.iter().find(|r| matches!(r, EscapeRule::Named { .. })) {
+                if c == *start_char {
+                    // Try to collect up to max_length chars until end_char
+                    let mut name = String::new();
+                    let mut found = false;
+                    for _ in 0..*max_length {
+                        if let Some(&peek_c) = chars.peek() {
+                            if peek_c == *end_char {
+                                chars.next(); // consume end_char
+                                found = true;
+                                break;
+                            } else {
+                                name.push(peek_c);
+                                chars.next();
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    if found {
+                        if let Some(&replacement) = self.escape_map.get(&name) {
+                            result.push(replacement);
+                            continue;
+                        } else {
+                            // Not a known escape, push as-is
+                            result.push(*start_char);
+                            result.push_str(&name);
+                            result.push(*end_char);
+                            continue;
+                        }
+                    } else {
+                        // Not a valid escape, push as-is
+                        result.push(*start_char);
+                        result.push_str(&name);
+                        continue;
+                    }
+                }
             }
+
+            // Default: push character as-is
+            result.push(c);
         }
 
         result
