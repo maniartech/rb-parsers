@@ -23,15 +23,15 @@ impl RegexScanner {
 impl Scanner for RegexScanner {
     fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
         if let Some(mat) = self.pattern.find(input) {
-            Ok(Some(Token {
+            return Ok(Some(Token {
                 token_type: self.token_type.clone(),
                 value: mat.as_str().to_string(),
                 line: 0,
                 column: 0,
                 token_sub_type: None,
             }))
-        } else {
-            Ok(None)
         }
+
+        Ok(None)
     }
 }
