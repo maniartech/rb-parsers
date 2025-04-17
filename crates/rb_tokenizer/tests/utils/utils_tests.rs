@@ -7,36 +7,36 @@ mod utils_tests {
     fn create_test_tokens() -> Vec<Token> {
         vec![
             Token {
-                token_type: "IDENTIFIER".to_string(),
-                token_sub_type: Some("VARIABLE".to_string()),
+                token_type: "IDENTIFIER",
+                token_sub_type: Some("VARIABLE"),
                 value: "myVar".to_string(),
                 line: 1,
                 column: 5,
             },
             Token {
-                token_type: "OPERATOR".to_string(),
-                token_sub_type: Some("ASSIGNMENT".to_string()),
+                token_type: "OPERATOR",
+                token_sub_type: Some("ASSIGNMENT"),
                 value: "=".to_string(),
                 line: 1,
                 column: 11,
             },
             Token {
-                token_type: "NUMBER".to_string(),
+                token_type: "NUMBER",
                 token_sub_type: None,
                 value: "42".to_string(),
                 line: 1,
                 column: 13,
             },
             Token {
-                token_type: "PUNCTUATION".to_string(),
-                token_sub_type: Some("SEMICOLON".to_string()),
+                token_type: "PUNCTUATION",
+                token_sub_type: Some("SEMICOLON"),
                 value: ";".to_string(),
                 line: 1,
                 column: 15,
             },
             Token {
-                token_type: "WHITESPACE".to_string(),
-                token_sub_type: Some("NEWLINE".to_string()),
+                token_type: "WHITESPACE",
+                token_sub_type: Some("NEWLINE"),
                 value: "\n".to_string(),
                 line: 1,
                 column: 16,
@@ -66,8 +66,8 @@ mod utils_tests {
     #[test]
     fn test_token_summary() {
         let token = Token {
-            token_type: "STRING".to_string(),
-            token_sub_type: Some("DOUBLE_QUOTED".to_string()),
+            token_type: "STRING",
+            token_sub_type: Some("DOUBLE_QUOTED"),
             value: "Hello\nWorld".to_string(),
             line: 2,
             column: 3,

@@ -7,8 +7,8 @@ mod token_tests {
     #[test]
     fn test_token_creation_and_accessors() {
         let token = Token {
-            token_type: "IDENTIFIER".to_string(),
-            token_sub_type: Some("VARIABLE".to_string()),
+            token_type: "IDENTIFIER",
+            token_sub_type: Some("VARIABLE"),
             value: "myVariable".to_string(),
             line: 42,
             column: 10,
@@ -16,7 +16,7 @@ mod token_tests {
 
         // Test basic properties
         assert_eq!(token.token_type, "IDENTIFIER");
-        assert_eq!(token.token_sub_type, Some("VARIABLE".to_string()));
+        assert_eq!(token.token_sub_type, Some("VARIABLE"));
         assert_eq!(token.value, "myVariable");
         assert_eq!(token.line, 42);
         assert_eq!(token.column, 10);
@@ -25,7 +25,7 @@ mod token_tests {
     #[test]
     fn test_token_with_no_subtype() {
         let token = Token {
-            token_type: "NUMBER".to_string(),
+            token_type: "NUMBER",
             token_sub_type: None,
             value: "123.45".to_string(),
             line: 5,
@@ -40,24 +40,24 @@ mod token_tests {
     #[test]
     fn test_token_equality() {
         let token1 = Token {
-            token_type: "KEYWORD".to_string(),
-            token_sub_type: Some("CONTROL".to_string()),
+            token_type: "KEYWORD",
+            token_sub_type: Some("CONTROL"),
             value: "if".to_string(),
             line: 10,
             column: 5,
         };
 
         let token2 = Token {
-            token_type: "KEYWORD".to_string(),
-            token_sub_type: Some("CONTROL".to_string()),
+            token_type: "KEYWORD",
+            token_sub_type: Some("CONTROL"),
             value: "if".to_string(),
             line: 10,
             column: 5,
         };
 
         let different_token = Token {
-            token_type: "KEYWORD".to_string(),
-            token_sub_type: Some("CONTROL".to_string()),
+            token_type: "KEYWORD",
+            token_sub_type: Some("CONTROL"),
             value: "else".to_string(),
             line: 10,
             column: 15,
@@ -71,8 +71,8 @@ mod token_tests {
     #[test]
     fn test_token_clone() {
         let original = Token {
-            token_type: "STRING".to_string(),
-            token_sub_type: Some("DOUBLE_QUOTED".to_string()),
+            token_type: "STRING",
+            token_sub_type: Some("DOUBLE_QUOTED"),
             value: "Hello, world!".to_string(),
             line: 7,
             column: 12,
@@ -83,7 +83,7 @@ mod token_tests {
         // Verify the cloned token is equal but not the same instance
         assert_eq!(original, cloned);
         assert_eq!(cloned.token_type, "STRING");
-        assert_eq!(cloned.token_sub_type, Some("DOUBLE_QUOTED".to_string()));
+        assert_eq!(cloned.token_sub_type, Some("DOUBLE_QUOTED"));
         assert_eq!(cloned.value, "Hello, world!");
         assert_eq!(cloned.line, 7);
         assert_eq!(cloned.column, 12);
@@ -92,8 +92,8 @@ mod token_tests {
     #[test]
     fn test_token_debug_output() {
         let token = Token {
-            token_type: "OPERATOR".to_string(),
-            token_sub_type: Some("ARITHMETIC".to_string()),
+            token_type: "OPERATOR",
+            token_sub_type: Some("ARITHMETIC"),
             value: "+".to_string(),
             line: 15,
             column: 8,
@@ -113,8 +113,8 @@ mod token_tests {
     #[test]
     fn test_token_with_multiline_content() {
         let token = Token {
-            token_type: "COMMENT".to_string(),
-            token_sub_type: Some("BLOCK".to_string()),
+            token_type: "COMMENT",
+            token_sub_type: Some("BLOCK"),
             value: "/* This is\na multiline\ncomment */".to_string(),
             line: 20,
             column: 0,
