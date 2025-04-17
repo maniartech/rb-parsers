@@ -5,31 +5,23 @@ use crate::tokens::{Token, TokenizationError};
 /// and continue until the end of line. This scanner handles structures like line comments,
 /// preprocessor directives, and other line-oriented syntax.
 pub struct EolScanner {
-    /// The delimiter that marks the beginning of the line structure
-    delimiter: String,
-
-    /// The token type to assign to matched lines
-    token_type: String,
-
-    /// An optional token subtype for more specific categorization
-    token_sub_type: Option<String>,
-
-    /// Whether to include the delimiter in the token value
-    include_delimiter: bool,
+    pub delimiter: String,
+    pub token_type: &'static str,
+    pub token_sub_type: Option<&'static str>,
+    pub include_delimiter: bool,
 }
 
 impl EolScanner {
-    /// Creates a new EOL scanner with the specified delimiter and token type
     pub fn new(
         delimiter: &str,
-        token_type: &str,
-        token_sub_type: Option<&str>,
+        token_type: &'static str,
+        token_sub_type: Option<&'static str>,
         include_delimiter: bool,
     ) -> Self {
         Self {
             delimiter: delimiter.to_string(),
-            token_type: token_type.to_string(),
-            token_sub_type: token_sub_type.map(|s| s.to_string()),
+            token_type,
+            token_sub_type,
             include_delimiter,
         }
     }
@@ -82,8 +74,8 @@ impl Scanner for EolScanner {
 
             // Create token with the correct value
             let token = Token {
-                token_type: self.token_type.clone(),
-                token_sub_type: self.token_sub_type.clone(),
+                token_type: self.token_type,
+                token_sub_type: self.token_sub_type,
                 value: token_value,
                 line: 0,   // To be filled in by the tokenizer
                 column: 0, // To be filled in by the tokenizer

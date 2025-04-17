@@ -124,10 +124,10 @@ pub struct BlockScanner {
     end_delimiter: String,
 
     /// The token type to assign to matched blocks
-    token_type: String,
+    token_type: &'static str,
 
     /// An optional token subtype for more specific categorization
-    token_sub_type: Option<String>,
+    token_sub_type: Option<&'static str>,
 
     /// Whether to support nested blocks with the same delimiters
     allow_nesting: bool,
@@ -150,12 +150,11 @@ pub struct BlockScanner {
 }
 
 impl BlockScanner {
-    /// Creates a new block scanner with the specified delimiters and token type
     pub fn new(
         start_delimiter: &str,
         end_delimiter: &str,
-        token_type: &str,
-        token_sub_type: Option<&str>,
+        token_type: &'static str,
+        token_sub_type: Option<&'static str>,
         allow_nesting: bool,
         raw_mode: bool,
         include_delimiters: bool,
@@ -163,8 +162,8 @@ impl BlockScanner {
         Self {
             start_delimiter: start_delimiter.to_string(),
             end_delimiter: end_delimiter.to_string(),
-            token_type: token_type.to_string(),
-            token_sub_type: token_sub_type.map(|s| s.to_string()),
+            token_type,
+            token_sub_type,
             allow_nesting,
             raw_mode,
             include_delimiters,
@@ -405,8 +404,8 @@ impl Scanner for BlockScanner {
                 // Create token with the correct length that accounts for delimiters
                 // even when they're not included in the value
                 let token = Token {
-                    token_type: self.token_type.clone(),
-                    token_sub_type: self.token_sub_type.clone(),
+                    token_type: self.token_type,
+                    token_sub_type: self.token_sub_type,
                     value: token_value,
                     line: 0,   // To be filled in by the tokenizer
                     column: 0, // To be filled in by the tokenizer
