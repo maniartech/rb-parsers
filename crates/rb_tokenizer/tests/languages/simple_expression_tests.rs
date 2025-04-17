@@ -104,8 +104,8 @@ mod tests {
             println!("Token types: {:?}", token_types);
 
             // Should have "Number" and "Operator" tokens at minimum
-            assert!(token_types.contains(&&"Number".to_string()), "Should have Number token");
-            assert!(token_types.contains(&&"Operator".to_string()), "Should have Operator token");
+            assert!(token_types.iter().any(|&&t| t == "Number"), "Should have Number token");
+            assert!(token_types.iter().any(|t| **t == "Operator"), "Should have Operator token");
         }
     }
 }

@@ -37,7 +37,7 @@ fn get_ejs_tokenizer() -> Tokenizer {
             Ok(None)
         } else {
             Ok(Some(rb_tokenizer::tokens::Token {
-                token_type: "HTML".to_string(),
+                token_type: "HTML",
                 token_sub_type: None,
                 value: html_content.to_string(),
                 line: 0,
