@@ -73,14 +73,14 @@ impl Tokenizer {
     pub fn add_regex_scanner(
         &mut self,
         pattern: &str,
-        token_type: &str,
-        sub_token_type: Option<&str>,
+        token_type: &'static str,
+        sub_token_type: Option<&'static str>,
     ) {
         let scanner = ScannerType::Regex(RegexScanner::new(pattern, token_type, sub_token_type));
         self.scanners.push(scanner);
     }
 
-    pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &str, default_scanner: Option<&str>) {
+    pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &'static str, default_scanner: Option<&'static str>) {
         let scanner = ScannerType::Symbol(SymbolScanner::new(symbol, token_type, default_scanner));
         self.scanners.push(scanner);
     }
@@ -102,8 +102,8 @@ impl Tokenizer {
         &mut self,
         start_delimiter: &str,
         end_delimiter: &str,
-        token_type: &str,
-        token_sub_type: Option<&str>,
+        token_type: &'static str,
+        token_sub_type: Option<&'static str>,
         allow_nesting: bool,
         raw_mode: bool,
         include_delimiters: bool,
@@ -131,8 +131,8 @@ impl Tokenizer {
     pub fn add_eol_scanner(
         &mut self,
         delimiter: &str,
-        token_type: &str,
-        token_sub_type: Option<&str>,
+        token_type: &'static str,
+        token_sub_type: Option<&'static str>,
         include_delimiter: bool,
     ) {
         let scanner = ScannerType::Eol(EolScanner::new(
@@ -265,8 +265,8 @@ impl Tokenizer {
 
                         // Create the whitespace token
                         tokens.push(Token {
-                            token_type: String::from("Whitespace"),
-                            token_sub_type: if has_newline { Some(String::from("Newline")) } else { None },
+                            token_type: "Whitespace",
+                            token_sub_type: if has_newline { Some("Newline") } else { None },
                             value: whitespace,
                             line: start_line,
                             column: start_column,

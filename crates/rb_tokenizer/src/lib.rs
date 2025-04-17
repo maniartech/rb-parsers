@@ -30,15 +30,15 @@ mod tests {
         // Test token comparison
         let expected = vec![
             tokens::Token {
-                token_type: "Number".to_string(),
+                token_type: "Number",
                 token_sub_type: None,
                 value: "123".to_string(),
                 line: 1,
                 column: 1,
             },
             tokens::Token {
-                token_type: "Operator".to_string(),
-                token_sub_type: Some("Plus".to_string()),
+                token_type: "Operator",
+                token_sub_type: Some("Plus"),
                 value: "+".to_string(),
                 line: 1,
                 column: 5,

@@ -107,7 +107,7 @@ pub fn analyze_tokens(tokens: &[Token]) -> String {
     for token in tokens {
         *type_counts.entry(&token.token_type).or_insert(0) += 1;
         if let Some(subtype) = &token.token_sub_type {
-            *subtype_counts.entry(subtype.as_str()).or_insert(0) += 1;
+            *subtype_counts.entry(*subtype).or_insert(0) += 1;
         }
         max_line = max_line.max(token.line);
         *tokens_per_line.entry(token.line).or_insert(0) += 1;
