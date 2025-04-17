@@ -65,7 +65,7 @@ mod eol_scanner_tests {
         // Expected tokens: LineComment, Whitespace(newline), Identifier
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].token_type, "Comment");
-        assert_eq!(result[0].token_sub_type, Some("LineComment".to_string()));
+        assert_eq!(result[0].token_sub_type, Some("LineComment"));
         assert_eq!(result[0].value, "// This is a line comment\n");
 
         // Check positions

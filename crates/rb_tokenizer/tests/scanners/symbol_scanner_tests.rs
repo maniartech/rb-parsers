@@ -48,7 +48,7 @@ mod symbol_scanner_tests {
         let token = token_option.unwrap();
         assert_eq!(token.token_type, "KEYWORD");
         assert_eq!(token.value, "for");
-        assert_eq!(token.token_sub_type, Some("LOOP".to_string()));
+        assert_eq!(token.token_sub_type, Some("LOOP"));
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod symbol_scanner_tests {
             assert_eq!(token.token_type, token_type);
             assert_eq!(token.value, symbol);
             if let Some(sub_type) = token_sub_type {
-                assert_eq!(token.token_sub_type, Some(sub_type.to_string()));
+                assert_eq!(token.token_sub_type, Some(sub_type));
             } else {
                 assert_eq!(token.token_sub_type, None);
             }

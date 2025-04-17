@@ -48,7 +48,7 @@ mod scanner_types_tests {
             fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
                 if input.starts_with("test") {
                     Ok(Some(Token {
-                        token_type: "TEST".to_string(),
+                        token_type: "TEST",
                         token_sub_type: None,
                         value: "test".to_string(),
                         line: 0,

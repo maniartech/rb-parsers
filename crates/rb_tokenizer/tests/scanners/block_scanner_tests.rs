@@ -159,7 +159,7 @@ mod block_scanner_tests {
         // Expected tokens: BlockComment, Whitespace, Identifier
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].token_type, "Comment");
-        assert_eq!(result[0].token_sub_type, Some("BlockComment".to_string()));
+        assert_eq!(result[0].token_sub_type, Some("BlockComment"));
         assert_eq!(result[0].value, "/* This is a block comment */");
 
         // Check positions
@@ -194,7 +194,7 @@ mod block_scanner_tests {
         // Expected tokens: String, Semicolon
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].token_type, "String");
-        assert_eq!(result[0].token_sub_type, Some("RawString".to_string()));
+        assert_eq!(result[0].token_sub_type, Some("RawString"));
 
         // Check that escape sequences are preserved intact
         assert!(result[0].value.contains("\\n"));
@@ -307,7 +307,7 @@ mod block_scanner_tests {
         // Expected tokens: CodeBlock
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].token_type, "CodeBlock");
-        assert_eq!(result[0].token_sub_type, Some("WithoutDelimiters".to_string()));
+        assert_eq!(result[0].token_sub_type, Some("WithoutDelimiters"));
         assert_eq!(result[0].value, " code block content ");
 
         // Verify the delimiters are excluded

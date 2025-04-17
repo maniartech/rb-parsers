@@ -12,13 +12,14 @@ mod closure_scanner_tests {
     fn test_basic_closure_scanner() {
         let scanner = ClosureScanner::new(Box::new(|input: &str| -> Result<Option<Token>, TokenizationError> {
             if input.starts_with("test") {
-                Ok(Some(Token {
-                    token_type: "TEST".to_string(),
+                let token = Token {
+                    token_type: "TEST",
                     token_sub_type: None,
                     value: "test".to_string(),
                     line: 0,
                     column: 0,
-                }))
+                };
+                Ok(Some(token))
             } else {
                 Ok(None)
             }
