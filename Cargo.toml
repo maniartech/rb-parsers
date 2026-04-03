@@ -1,9 +1,17 @@
 [package]
-name = "rb-tokenizer"
+name = "rb_parsers"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+    "crates/rb_tokenizer",
+    "crates/rb_parser",
+    "crates/visitor",
+]
 
 [dependencies]
-regex = "1.10.3"
+
+[dev-dependencies]
+rb_tokenizer = { path = "crates/rb_tokenizer" }
+rb_parser = { path = "crates/rb_parser" }

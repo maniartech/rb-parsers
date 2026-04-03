@@ -1,6 +1,6 @@
-# Contributing to rb-tokenizer
+# Contributing to rb_tokenizer
 
-Thank you for taking the time to contribute to `rb-tokenizer`, a scanner-based tokenizer designed for flexibility and ease of integration. This document outlines our guidelines and code of conduct for contributing to this project. By participating in this project, you agree to abide by its terms.
+Thank you for taking the time to contribute to `rb_tokenizer`, a scanner-based tokenizer designed for flexibility and ease of integration. This document outlines our guidelines and code of conduct for contributing to this project. By participating in this project, you agree to abide by its terms.
 
 ## Code of Conduct
 
@@ -56,4 +56,4 @@ We warmly welcome pull requests. Here's how to prepare your PRs:
 
 ## Acknowledgments
 
-Your contributions make open-source community projects like `rb-tokenizer` possible. Thank you for your efforts to help improve the project and the community around it.
+Your contributions make open-source community projects like `rb_tokenizer` possible. Thank you for your efforts to help improve the project and the community around it.
