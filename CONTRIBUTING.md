@@ -56,7 +56,7 @@ We warmly welcome pull requests. Here's how to prepare your PRs:
 
 ### Testing and Example Policy
 
-All changes to scanner, tokenizer, parser, or visitor behavior must include automated coverage that proves the intended behavior.
+All changes to scanner, tokenizer, parser, or traversal behavior must include automated coverage that proves the intended behavior.
 
 For examples based on real languages, the policy is stricter:
 
@@ -78,7 +78,7 @@ For examples based on real languages, the policy is stricter:
 
 1. Keep `rb_tokenizer` focused on reusable lexical infrastructure.
 2. Move parser APIs, grammars, and language parser examples into `rb_parser` as they stabilize.
-3. Keep `visitor` dedicated to traversal and analysis utilities that operate on parser-owned AST types.
+3. Keep traversal and analysis utilities inside `rb_parser` until a stable extraction boundary exists.
 4. Prefer cross-crate integration tests in the workspace root only for end-to-end scenarios.
 
 ## Acknowledgments

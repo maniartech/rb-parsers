@@ -10,7 +10,6 @@ rust-parsers
 │   ├── rb_common      # Shared cross-crate infrastructure and common abstractions
 │   ├── rb_tokenizer   # Tokenization engine and scanner implementations
 │   ├── rb_parser      # Parser crate under active design
-│   └── visitor        # Visitor crate reserved for AST traversal utilities
 ├── tests              # Workspace-level integration and example coverage
 ├── Cargo.toml         # Workspace manifest
 └── README.md          # Workspace overview
@@ -21,7 +20,7 @@ rust-parsers
 - `rb_tokenizer` is the primary implemented crate in the workspace.
 - `rb_common` is the shared infrastructure crate for cross-library primitives.
 - `rb_parser` is still in the API and architecture phase.
-- `visitor` is reserved for traversal utilities and should stay minimal until parser-side AST types stabilize.
+- Traversal and visitor-style APIs should live inside `rb_parser` until there is a stable reason to extract them again.
 
 ## Recommended Project Organization
 
@@ -30,7 +29,7 @@ The clean direction for the workspace is:
 1. Keep cross-crate diagnostics, error/reporting primitives, source spans, and similar shared abstractions inside `rb_common`.
 2. Keep tokenization logic, scanner primitives, and token models inside `rb_tokenizer`.
 3. Keep grammar, parse errors, parse APIs, and language-specific parser examples inside `rb_parser`.
-4. Keep AST walking, transforms, formatting passes, and analysis visitors inside `visitor`.
+4. Keep AST walking, transforms, formatting passes, and analysis visitors inside `rb_parser` until a separate traversal package is justified.
 5. Keep workspace-level tests focused on end-to-end examples that cross crate boundaries.
 6. Keep real-language examples executable and covered by tests, rather than storing example-only code paths that are not validated.
 

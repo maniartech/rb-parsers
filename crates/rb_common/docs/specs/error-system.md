@@ -24,7 +24,7 @@ The system should support:
 
 ## Intended Users
 
-1. Library developers building tokenizers, parsers, and visitors
+1. Library developers building tokenizers, parsers, and related traversal layers
 2. Language authors defining language-specific diagnostics
 3. Tooling consumers such as CLIs, editors, and CI systems
 

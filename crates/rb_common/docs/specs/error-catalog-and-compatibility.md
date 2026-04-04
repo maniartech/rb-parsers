@@ -15,7 +15,8 @@ Initial direction:
 - `RBC` for common/framework-level codes
 - `RBT` for tokenizer
 - `RBP` for parser
-- `RBV` for visitor if needed later
+
+Future extracted crates should define their own namespace only when they become real public subsystems.
 
 Examples:
 
