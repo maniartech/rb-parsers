@@ -1,37 +1,19 @@
-# another-crate Documentation
+# visitor
 
-This crate serves as an example of a Rust library within a monorepo structure. It is designed to demonstrate how to organize and manage multiple related crates in a single repository.
+`visitor` is reserved for AST traversal, analysis, and transform helpers that sit on top of parser-owned tree structures.
 
-## Purpose
+## Current Status
 
-The `another-crate` library provides additional functionality that complements the `rb_tokenizer` crate. It can be used independently or in conjunction with other crates in the monorepo.
+This crate is intentionally minimal while `rb_parser` is still defining its public AST and parser APIs.
 
-## Usage
+## Intended Scope
 
-To use `another-crate`, add it as a dependency in your `Cargo.toml` file:
+When the parser API stabilizes, this crate should contain:
 
-```toml
-[dependencies]
-another-crate = { path = "../another-crate" }
-```
+- tree traversal traits
+- reusable visitor adapters
+- analysis passes
+- transformation utilities
+- formatting or lint-style tree walkers
 
-## Features
-
-- Modular design that allows for easy integration with other crates.
-- Well-defined public API for seamless usage.
-
-## Examples
-
-Here is a simple example of how to use `another-crate`:
-
-```rust
-use another_crate::some_function;
-
-fn main() {
-    some_function();
-}
-```
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+It should not duplicate tokenizer logic from `rb_tokenizer` or parser construction logic from `rb_parser`.

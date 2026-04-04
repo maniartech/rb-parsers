@@ -1,60 +1,63 @@
-# Rust Monorepo
+# Rust Parsers Workspace
 
-This repository is a Rust monorepo that contains multiple crates, each serving different purposes. The main crate is `rb_tokenizer`, which provides functionality for tokenizing various input formats, including JSON. Additionally, there is another crate named `another-crate`, which serves as an example of how to structure additional functionality within the monorepo.
+This repository is a Rust workspace for scanner-driven language tooling.
 
-## Structure
-
-The project is organized as follows:
+## Workspace Layout
 
 ```
-rust-monorepo
+rust-parsers
 ├── crates
-│   ├── rb_tokenizer       # The main tokenizer crate
-│   │   ├── src            # Source code for rb_tokenizer
-│   │   │   ├── lib.rs     # Library entry point
-│   │   │   └── tokenizer.rs # Tokenization logic
-│   │   ├── Cargo.toml     # Configuration for rb_tokenizer
-│   │   └── README.md      # Documentation for rb_tokenizer
-│   └── another-crate      # An additional example crate
-│       ├── src            # Source code for another-crate
-│       │   └── lib.rs     # Library entry point
-│       ├── Cargo.toml     # Configuration for another-crate
-│       └── README.md      # Documentation for another-crate
-├── tests                  # Test files for the monorepo
-│   ├── json_tests.rs      # Tests for JSON tokenizer functionality
-│   └── integration_tests.rs # Integration tests for the monorepo
-├── Cargo.toml             # Root configuration for the monorepo
-└── README.md              # Overview of the monorepo
+│   ├── rb_common      # Shared cross-crate infrastructure and common abstractions
+│   ├── rb_tokenizer   # Tokenization engine and scanner implementations
+│   ├── rb_parser      # Parser crate under active design
+│   └── visitor        # Visitor crate reserved for AST traversal utilities
+├── tests              # Workspace-level integration and example coverage
+├── Cargo.toml         # Workspace manifest
+└── README.md          # Workspace overview
 ```
 
-## Getting Started
+## Current Status
 
-To get started with this monorepo, clone the repository and navigate to the root directory. You can build and test each crate individually or run the tests for the entire workspace.
+- `rb_tokenizer` is the primary implemented crate in the workspace.
+- `rb_common` is the shared infrastructure crate for cross-library primitives.
+- `rb_parser` is still in the API and architecture phase.
+- `visitor` is reserved for traversal utilities and should stay minimal until parser-side AST types stabilize.
 
-### Prerequisites
+## Recommended Project Organization
 
-Make sure you have Rust and Cargo installed on your machine. You can install them from [the official Rust website](https://www.rust-lang.org/tools/install).
+The clean direction for the workspace is:
 
-### Building the Crates
+1. Keep cross-crate diagnostics, error/reporting primitives, source spans, and similar shared abstractions inside `rb_common`.
+2. Keep tokenization logic, scanner primitives, and token models inside `rb_tokenizer`.
+3. Keep grammar, parse errors, parse APIs, and language-specific parser examples inside `rb_parser`.
+4. Keep AST walking, transforms, formatting passes, and analysis visitors inside `visitor`.
+5. Keep workspace-level tests focused on end-to-end examples that cross crate boundaries.
+6. Keep real-language examples executable and covered by tests, rather than storing example-only code paths that are not validated.
 
-To build all the crates in the workspace, run:
+## Development Commands
 
+Build the full workspace:
+
+```bash
+cargo build --workspace
 ```
-cargo build
+
+Run the full test suite:
+
+```bash
+cargo test --workspace
 ```
 
-### Running Tests
+Run lint checks:
 
-To run the tests for all crates, use:
-
-```
-cargo test
+```bash
+cargo clippy --workspace --all-targets
 ```
 
-## Contributing
+## Quality Policy
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue if you find any bugs or have suggestions for improvements.
+Examples that model real languages must behave like supported language features, include regression coverage, and remain green in `cargo test --workspace`. Broken behavior should be fixed or clearly marked as unsupported, but never normalized by tests.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+This project is licensed under the MIT License. See the LICENSE file for details.

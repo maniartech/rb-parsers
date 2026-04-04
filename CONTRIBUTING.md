@@ -54,6 +54,33 @@ We warmly welcome pull requests. Here's how to prepare your PRs:
 4. Update the README.md with details of changes, if applicable.
 5. Submit your pull request.
 
+### Testing and Example Policy
+
+All changes to scanner, tokenizer, parser, or visitor behavior must include automated coverage that proves the intended behavior.
+
+For examples based on real languages, the policy is stricter:
+
+1. Real-language examples must be executable tests, not documentation-only samples.
+2. Tests must cover expected success cases, invalid syntax, and edge cases that are common in the source language.
+3. Escapes, nesting, delimiter exclusion, whitespace handling, and UTF-8 input must be covered when the feature claims to support them.
+4. Tests must assert token or parse content, not just token counts.
+5. Broken behavior must never be locked in as the expected result just to keep the suite green.
+
+### Scanner and Regex Rules
+
+1. Scanners must consume the exact number of input bytes they matched.
+2. Any scanner that transforms output must still preserve correct input consumption semantics.
+3. Regex-based scanners must return recoverable errors for invalid patterns.
+4. Regex matches are required to start at the current tokenizer cursor. Do not rely on late matches inside the remaining slice.
+5. UTF-8 safety is required for all cursor movement and delimiter scanning logic.
+
+### Recommended Workspace Direction
+
+1. Keep `rb_tokenizer` focused on reusable lexical infrastructure.
+2. Move parser APIs, grammars, and language parser examples into `rb_parser` as they stabilize.
+3. Keep `visitor` dedicated to traversal and analysis utilities that operate on parser-owned AST types.
+4. Prefer cross-crate integration tests in the workspace root only for end-to-end scenarios.
+
 ## Acknowledgments
 
 Your contributions make open-source community projects like `rb_tokenizer` possible. Thank you for your efforts to help improve the project and the community around it.
