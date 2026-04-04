@@ -1,4 +1,5 @@
 use super::scanner::Scanner;
+use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError};
 
 /// `EolScanner` implementation for parsing structures that start with a specific delimiter
@@ -85,5 +86,34 @@ impl Scanner for EolScanner {
         } else {
             Ok(None)
         }
+    }
+
+    fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+        if !input.starts_with(&self.delimiter) {
+            return Ok(None);
+        }
+
+        if let Some(end_pos) = self.find_line_end(input) {
+            let full_match = &input[0..end_pos];
+
+            let token_value = if self.include_delimiter {
+                full_match.to_string()
+            } else {
+                input[self.delimiter.len()..end_pos].to_string()
+            };
+
+            return Ok(Some(ScanMatch {
+                consumed_len: end_pos,
+                token: Token {
+                    token_type: self.token_type,
+                    token_sub_type: self.token_sub_type,
+                    value: token_value,
+                    line: 0,
+                    column: 0,
+                },
+            }));
+        }
+
+        Ok(None)
     }
 }

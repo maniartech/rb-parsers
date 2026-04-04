@@ -19,15 +19,15 @@ mod integration_tests {
         tokenizer.add_symbol_scanner("]", "Bracket", Some("CloseBracket"));
         tokenizer.add_symbol_scanner(":", "Colon", None);
         tokenizer.add_symbol_scanner(",", "Comma", None);
-        tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
-        tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
-        tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None);
+        tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None).unwrap();
+        tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None).unwrap();
+        tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None).unwrap();
 
         tokenizer
     }
 
     #[test]
-    fn test_integration_with_another_crate() {
+    fn test_workspace_json_tokenization() {
         let tokenizer = get_json_tokenizer();
         let json_input = r#"{"key": "value"}"#;
         let result = tokenizer.tokenize(json_input).expect("Tokenization failed");

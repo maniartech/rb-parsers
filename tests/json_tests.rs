@@ -16,9 +16,9 @@ fn get_json_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner(":", "Colon", None);
     tokenizer.add_symbol_scanner(",", "Comma", None);
 
-    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
-    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
-    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None);
+    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None).unwrap();
+    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None).unwrap();
+    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None).unwrap();
 
     tokenizer
 }
@@ -38,8 +38,29 @@ mod json_tests {
         }"#;
         let result = tokenizer.tokenize(json_input).expect("Tokenization failed");
 
-        assert_eq!(result.len(), 15, "Unexpected number of tokens");
-        println!("JSON tokens: {:?}", result);
+        let actual: Vec<_> = result.iter()
+            .map(|token| (token.token_type, token.token_sub_type, token.value.as_str()))
+            .collect();
+
+        let expected = vec![
+            ("Brace", Some("OpenBrace"), "{"),
+            ("String", None, "\"key\""),
+            ("Colon", None, ":"),
+            ("String", None, "\"value\""),
+            ("Comma", None, ","),
+            ("String", None, "\"array\""),
+            ("Colon", None, ":"),
+            ("Bracket", Some("OpenBracket"), "["),
+            ("Literal", None, "true"),
+            ("Comma", None, ","),
+            ("Number", None, "123"),
+            ("Comma", None, ","),
+            ("Literal", None, "null"),
+            ("Bracket", Some("CloseBracket"), "]"),
+            ("Brace", Some("CloseBrace"), "}"),
+        ];
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -54,10 +75,21 @@ mod json_tests {
         let result = tokenizer.tokenize(json_input).expect("Tokenization failed");
 
         pretty_print_tokens(&result);
-        assert_eq!(result.len(), 6, "Unexpected number of tokens when whitespace is included");
-        assert_eq!(result[3].token_type, "Whitespace");
-        assert_eq!(result[3].value, " ");
-        println!("JSON tokens with whitespace: {:?}", result);
+
+        let actual: Vec<_> = result.iter()
+            .map(|token| (token.token_type, token.token_sub_type, token.value.as_str()))
+            .collect();
+
+        let expected = vec![
+            ("Brace", Some("OpenBrace"), "{"),
+            ("String", None, "\"key\""),
+            ("Colon", None, ":"),
+            ("Whitespace", None, " "),
+            ("String", None, "\"value\""),
+            ("Brace", Some("CloseBrace"), "}"),
+        ];
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

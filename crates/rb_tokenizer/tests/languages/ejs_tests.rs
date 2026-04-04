@@ -87,7 +87,7 @@ mod ejs_tests {
 
         // Check that the second token is EJS Output
         assert_eq!(result[1].token_type, "EJS");
-        assert_eq!(result[1].token_sub_type.as_deref().unwrap_or(""), "Output");
+        assert_eq!(result[1].token_sub_type.unwrap_or(""), "Output");
         assert!(result[1].value.contains("title"));
     }
 
@@ -104,7 +104,7 @@ mod ejs_tests {
         assert_eq!(result[0].value, "Hello ");
 
         assert_eq!(result[1].token_type, "EJS");
-        assert_eq!(result[1].token_sub_type.as_deref().unwrap_or(""), "Comment");
+        assert_eq!(result[1].token_sub_type.unwrap_or(""), "Comment");
         assert_eq!(result[1].value, "<%# This is a comment %>");
 
         assert_eq!(result[2].token_type, "HTML");
@@ -121,7 +121,7 @@ mod ejs_tests {
         assert_eq!(result.len(), 3, "Should have opening HTML, EJS, closing HTML tokens");
 
         assert_eq!(result[1].token_type, "EJS");
-        assert_eq!(result[1].token_sub_type.as_deref().unwrap_or(""), "Unescaped");
+        assert_eq!(result[1].token_sub_type.unwrap_or(""), "Unescaped");
         assert_eq!(result[1].value, "<%- rawHtml %>");
     }
 
@@ -163,16 +163,16 @@ mod ejs_tests {
 
         // Count the number of different token types
         let ejs_code_count = result.iter()
-            .filter(|t| t.token_type == "EJS" && t.token_sub_type.as_deref() == Some("Code"))
+            .filter(|t| t.token_type == "EJS" && t.token_sub_type == Some("Code"))
             .count();
         let ejs_output_count = result.iter()
-            .filter(|t| t.token_type == "EJS" && t.token_sub_type.as_deref() == Some("Output"))
+            .filter(|t| t.token_type == "EJS" && t.token_sub_type == Some("Output"))
             .count();
         let ejs_unescaped_count = result.iter()
-            .filter(|t| t.token_type == "EJS" && t.token_sub_type.as_deref() == Some("Unescaped"))
+            .filter(|t| t.token_type == "EJS" && t.token_sub_type == Some("Unescaped"))
             .count();
         let ejs_comment_count = result.iter()
-            .filter(|t| t.token_type == "EJS" && t.token_sub_type.as_deref() == Some("Comment"))
+            .filter(|t| t.token_type == "EJS" && t.token_sub_type == Some("Comment"))
             .count();
 
         assert!(ejs_code_count >= 4, "Should have at least 4 code blocks");

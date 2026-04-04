@@ -38,8 +38,8 @@ fn get_eol_scanner_tokenizer() -> Tokenizer {
     );
 
     // Add regular scanners for other tokens
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-    tokenizer.add_regex_scanner(r"^\d+", "Number", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+    tokenizer.add_regex_scanner(r"^\d+", "Number", None).unwrap();
     tokenizer.add_symbol_scanner(";", "Semicolon", None);
     tokenizer.add_symbol_scanner("=", "Operator", Some("Assignment"));
     tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));

@@ -1,4 +1,5 @@
 use super::scanner::Scanner;
+use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError};
 use regex::Regex;
 use std::collections::HashMap;
@@ -47,9 +48,9 @@ impl EscapeRule {
         }
 
         match self {
-            EscapeRule::Simple { escape_char: _ } => {
+            EscapeRule::Simple { escape_char } => {
                 // Process simple escape
-                if position + 1 < input.len() {
+                if input[position..].starts_with(*escape_char) && position + escape_char.len_utf8() < input.len() {
                     return Some(2); // Escape character + the character it escapes
                 }
                 None
@@ -57,15 +58,16 @@ impl EscapeRule {
 
             EscapeRule::Named { start_char, end_char, max_length } => {
                 if input[position..].starts_with(*start_char) {
-                    // Look for end_char within the max_length
-                    let search_end = std::cmp::min(position + *max_length, input.len());
-                    for i in position + 1..search_end {
-                        if i < input.len() {
-                            if let Some(c) = input[i..].chars().next() {
-                                if c == *end_char {
-                                    return Some(i - position + 1);
-                                }
-                            }
+                    let start_len = start_char.len_utf8();
+                    let remainder = &input[position + start_len..];
+
+                    for (count, (offset, c)) in remainder.char_indices().enumerate() {
+                        if count + 1 > *max_length {
+                            break;
+                        }
+
+                        if c == *end_char {
+                            return Some(start_len + offset + c.len_utf8());
                         }
                     }
                 }
@@ -150,6 +152,7 @@ pub struct BlockScanner {
 }
 
 impl BlockScanner {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         start_delimiter: &str,
         end_delimiter: &str,
@@ -414,9 +417,46 @@ impl Scanner for BlockScanner {
                 // Return the full match end position to ensure
                 // tokenizer correctly advances past all consumed characters
                 Ok(Some(token))
-            },
+                }
             Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
+        }
+
+        fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+            if !input.starts_with(&self.start_delimiter) {
+                return Ok(None);
+        }
+
+            match self.find_block_end(input) {
+                Ok(Some(end_pos)) => {
+                    let full_match = &input[0..end_pos];
+
+                    let raw_value = if self.include_delimiters {
+                        full_match.to_string()
+                    } else {
+                        input[self.start_delimiter.len()..end_pos - self.end_delimiter.len()].to_string()
+                    };
+
+                    let token_value = if !self.raw_mode && self.transform_escapes {
+                        self.process_escape_sequences(&raw_value)
+                    } else {
+                        raw_value
+                    };
+
+                    Ok(Some(ScanMatch {
+                        consumed_len: end_pos,
+                        token: Token {
+                            token_type: self.token_type,
+                            token_sub_type: self.token_sub_type,
+                            value: token_value,
+                            line: 0,
+                            column: 0,
+                        },
+                    }))
+                }
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
+            }
     }
 }

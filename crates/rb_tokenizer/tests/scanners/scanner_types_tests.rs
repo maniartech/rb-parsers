@@ -27,7 +27,7 @@ mod scanner_types_tests {
 
     #[test]
     fn test_scanner_type_regex() {
-        let regex_scanner = RegexScanner::new(r"^\d+", "NUMBER", None);
+        let regex_scanner = RegexScanner::new(r"^\d+", "NUMBER", None).unwrap();
         let scanner_type = ScannerType::Regex(regex_scanner);
 
         // Test as a scanner

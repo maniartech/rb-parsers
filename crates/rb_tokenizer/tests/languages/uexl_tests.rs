@@ -46,30 +46,30 @@ fn get_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner(">>", "Operator", Some("BitwiseRightShift"));
 
     // Literal Keywords
-    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None);
+    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None).unwrap();
 
     // Raw String Literals in the form of: `string`, do not escape characters
-    tokenizer.add_regex_scanner(r#"^`([^`]|\\.)*`"#, "String", None);
+    tokenizer.add_regex_scanner(r#"^`([^`]|\\.)*`"#, "String", None).unwrap();
 
     // String Literals in the form of: 'string'
-    tokenizer.add_regex_scanner(r#"^'([^'\\]|\\.)*'"#, "String", None);
+    tokenizer.add_regex_scanner(r#"^'([^'\\]|\\.)*'"#, "String", None).unwrap();
 
     // String Literals in the form of: "string"
-    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
+    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None).unwrap();
 
     // Identifier
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
 
     // Variable starts with $ and followed by letters, numbers, or underscores
-    tokenizer.add_regex_scanner(r"^\$[a-zA-Z0-9_]*", "Variable", None);
+    tokenizer.add_regex_scanner(r"^\$[a-zA-Z0-9_]*", "Variable", None).unwrap();
 
     // Named Pipes in the form of: |: with optional name |map: format
-    tokenizer.add_regex_scanner(r"^\|([a-zA-Z][a-zA-Z0-9_]*\:)?", "Pipe", None);
+    tokenizer.add_regex_scanner(r"^\|([a-zA-Z][a-zA-Z0-9_]*\:)?", "Pipe", None).unwrap();
 
     tokenizer.add_symbol_scanner("|", "Operator", Some("BitwiseOr"));
 
     // Real Numbers in the form of: 123, 123.456, 123.456e-78 with optional sign
-    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
+    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None).unwrap();
 
     tokenizer
 }

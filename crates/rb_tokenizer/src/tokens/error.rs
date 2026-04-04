@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub enum TokenizationError {
     UnrecognizedToken(String),
     UnmatchedBlockDelimiter(String, String),
+    InvalidRegexPattern { pattern: String, message: String },
     // Define additional error types as needed.
 }
 
@@ -15,6 +16,9 @@ impl fmt::Display for TokenizationError {
             },
             TokenizationError::UnmatchedBlockDelimiter(start, end) => {
                 write!(f, "Unmatched block delimiter: start '{}' missing matching end '{}'", start, end)
+            }
+            TokenizationError::InvalidRegexPattern { pattern, message } => {
+                write!(f, "Invalid regex pattern '{}': {}", pattern, message)
             }
         }
     }

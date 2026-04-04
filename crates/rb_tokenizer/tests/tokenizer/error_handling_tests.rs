@@ -178,7 +178,7 @@ mod error_handling_tests {
 
             // Check for newline subtype
             let newline_tokens = tokens.iter()
-                .filter(|t| t.token_type == "Whitespace" && t.token_sub_type.as_deref() == Some("Newline"))
+                .filter(|t| t.token_type == "Whitespace" && t.token_sub_type == Some("Newline"))
                 .count();
 
             assert!(newline_tokens > 0, "Should have at least one newline token");

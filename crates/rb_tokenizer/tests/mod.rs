@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 // Main test module file that includes all test submodules
 
 // Include test modules

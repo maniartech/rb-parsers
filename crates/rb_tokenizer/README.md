@@ -47,8 +47,8 @@ let config = TokenizerConfig {
 };
 let mut tokenizer = Tokenizer::with_config(config);
 
-tokenizer.add_regex_scanner(r"^\d+", "Number", None);
-tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+tokenizer.add_regex_scanner(r"\d+", "Number", None).unwrap();
+tokenizer.add_regex_scanner(r"[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
 tokenizer.add_symbol_scanner("(", "Operator", Some("OpenParen"));
 tokenizer.add_symbol_scanner(")", "Operator", Some("CloseParen"));
 tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
@@ -87,7 +87,7 @@ Each scanner is responsible for handling its own whitespace behavior. For exampl
 
 ```rust
 // String scanner that preserves internal whitespace
-tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None);
+tokenizer.add_regex_scanner(r#""([^"\\]|\\.)*""#, "String", None).unwrap();
 
 // Operator scanner that doesn't need to handle whitespace
 tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
@@ -144,6 +144,16 @@ string_scanner.add_escape_mapping("amp", '&');
 ```
 
 This flexible system allows you to tokenize content from virtually any programming language or templating system with their unique escaping rules.
+
+## Regex Scanner Semantics
+
+Regex scanners always match from the current tokenizer cursor.
+
+- Invalid regex patterns return an error instead of panicking.
+- If a regex pattern does not start with `^`, the scanner prepends it automatically before compilation.
+- When this auto-prefixing happens, the scanner emits a warning so the caller can make the anchoring explicit.
+- The tokenizer still rejects any late match that does not begin at the current cursor.
+- Using `^` is optional, but including it can still make the intent clearer to readers.
 
 ## Examples
 

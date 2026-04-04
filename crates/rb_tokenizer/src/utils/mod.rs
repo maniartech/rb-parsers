@@ -11,7 +11,7 @@ pub fn pretty_print_tokens(tokens: &[Token]) -> String {
             "> {:3}: {:15} {:20} '{}' (line {}, col {}) \n\n",
             i,
             token.token_type,
-            token.token_sub_type.as_deref().unwrap_or(""),
+            token.token_sub_type.unwrap_or(""),
             token.value.replace('\n', "\\n"),
             token.line,
             token.column
@@ -26,7 +26,7 @@ pub fn token_summary(token: &Token) -> String {
     format!(
         "{}:{} '{}'",
         token.token_type,
-        token.token_sub_type.as_deref().unwrap_or(""),
+        token.token_sub_type.unwrap_or(""),
         token.value.replace('\n', "\\n")
     )
 }

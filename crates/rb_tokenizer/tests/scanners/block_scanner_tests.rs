@@ -58,8 +58,8 @@ fn get_block_scanner_tokenizer() -> Tokenizer {
     );
 
     // Add regular scanners for other tokens
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
-    tokenizer.add_regex_scanner(r"^\d+", "Number", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+    tokenizer.add_regex_scanner(r"^\d+", "Number", None).unwrap();
     tokenizer.add_symbol_scanner(";", "Semicolon", None);
 
     tokenizer
@@ -139,7 +139,7 @@ fn get_enhanced_escape_tokenizer() -> Tokenizer {
     tokenizer.add_scanner(Box::new(custom_scanner));
 
     // Add identifier scanner - should be last so it doesn't take precedence over block scanners
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
 
     tokenizer
 }
@@ -492,19 +492,14 @@ mod block_scanner_tests {
         let input = r#""String with \n and \t escapes" hello"#;
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
 
-        // Debug output to see what tokens we're getting
-        println!("Number of tokens: {}", result.len());
-        for (i, token) in result.iter().enumerate() {
-            println!("Token {}: Type='{}', Value='{}'", i, token.token_type, token.value);
-        }
-
-        // Modify the test to match the actual number of tokens we're getting
-        // TODO: Eventually fix the tokenizer to properly recognize the string as a single token
-        assert_eq!(result.len(), 7);
-        // Verify these are all Identifier tokens as we're seeing in the debug output
-        for token in &result {
-            assert_eq!(token.token_type, "Identifier");
-        }
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].token_type, "String");
+        assert_eq!(result[0].token_sub_type, Some("DoubleQuote"));
+        assert!(result[0].value.contains("String with "));
+        assert!(result[0].value.contains('\n'));
+        assert!(result[0].value.contains('\t'));
+        assert_eq!(result[1].token_type, "Identifier");
+        assert_eq!(result[1].value, "hello");
     }
 
     #[test]
@@ -524,5 +519,79 @@ mod block_scanner_tests {
         assert_eq!(result[0].token_type, "Template");
         assert_eq!(result[1].token_type, "Identifier");
         assert_eq!(result[1].value, "after");
+    }
+
+    #[test]
+    fn test_tokenizer_with_excluded_delimiters_and_transformed_escapes() {
+        let config = TokenizerConfig {
+            tokenize_whitespace: false,
+            continue_on_error: false,
+            error_tolerance_limit: 1,
+            track_token_positions: true,
+        };
+        let mut tokenizer = Tokenizer::with_config(config);
+
+        let mut string_scanner = BlockScanner::new(
+            "\"",
+            "\"",
+            "String",
+            Some("WithoutDelimiters"),
+            false,
+            false,
+            false
+        );
+        string_scanner.add_simple_escape('\\');
+        string_scanner.set_transform_escapes(true);
+        string_scanner.add_escape_mapping("n", '\n');
+
+        tokenizer.add_scanner(Box::new(string_scanner));
+        tokenizer.add_regex_scanner(r"[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+
+        let input = "\"line\\nvalue\" next";
+        let result = tokenizer.tokenize(input).expect("Tokenization failed");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].token_type, "String");
+        assert_eq!(result[0].token_sub_type, Some("WithoutDelimiters"));
+        assert_eq!(result[0].value, "line\nvalue");
+        assert_eq!(result[1].token_type, "Identifier");
+        assert_eq!(result[1].value, "next");
+        assert_eq!(result[1].column, 15);
+    }
+
+    #[test]
+    fn test_named_escape_scanning_with_utf8_content() {
+        let config = TokenizerConfig {
+            tokenize_whitespace: false,
+            continue_on_error: false,
+            error_tolerance_limit: 1,
+            track_token_positions: true,
+        };
+        let mut tokenizer = Tokenizer::with_config(config);
+
+        let mut paragraph_scanner = BlockScanner::new(
+            "<p>",
+            "</p>",
+            "HTML",
+            Some("Paragraph"),
+            false,
+            false,
+            true
+        );
+        paragraph_scanner.add_named_escape('&', ';', 10);
+        tokenizer.add_scanner(Box::new(paragraph_scanner));
+        tokenizer.add_regex_scanner(r"[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+
+        let input = "<p>café 🙂 &amp; tea</p> tail";
+        let result = tokenizer.tokenize(input).expect("Tokenization failed");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].token_type, "HTML");
+        assert_eq!(result[0].token_sub_type, Some("Paragraph"));
+        assert!(result[0].value.contains("café"));
+        assert!(result[0].value.contains("🙂"));
+        assert!(result[0].value.contains("&amp;"));
+        assert_eq!(result[1].token_type, "Identifier");
+        assert_eq!(result[1].value, "tail");
     }
 }

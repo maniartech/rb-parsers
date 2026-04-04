@@ -27,7 +27,36 @@ pub struct Tokenizer {
     last_errors: RefCell<Option<Vec<TokenizationError>>>,
 }
 
+impl Default for Tokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tokenizer {
+    fn advance_cursor(
+        chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
+        consumed_len: usize,
+        current_line: &mut usize,
+        current_column: &mut usize,
+    ) {
+        let mut consumed_bytes = 0;
+
+        while consumed_bytes < consumed_len {
+            if let Some((_, ch)) = chars.next() {
+                consumed_bytes += ch.len_utf8();
+                if ch == '\n' {
+                    *current_line += 1;
+                    *current_column = 1;
+                } else {
+                    *current_column += 1;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
     pub fn new() -> Self {
         Tokenizer {
             scanners: Vec::new(),
@@ -75,9 +104,10 @@ impl Tokenizer {
         pattern: &str,
         token_type: &'static str,
         sub_token_type: Option<&'static str>,
-    ) {
-        let scanner = ScannerType::Regex(RegexScanner::new(pattern, token_type, sub_token_type));
+    ) -> Result<&mut Self, TokenizationError> {
+        let scanner = ScannerType::Regex(RegexScanner::new(pattern, token_type, sub_token_type)?);
         self.scanners.push(scanner);
+        Ok(self)
     }
 
     pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &'static str, default_scanner: Option<&'static str>) {
@@ -87,7 +117,7 @@ impl Tokenizer {
 
     pub fn add_closure_scanner(
         &mut self,
-        cb: Box<dyn Fn(&str) -> Result<Option<Token>, TokenizationError>>,
+        cb: Box<scanners::closure_scanner::ScanClosure>,
     ) {
         let scanner = ScannerType::Closure(scanners::ClosureScanner::new(cb));
         self.scanners.push(scanner);
@@ -98,6 +128,7 @@ impl Tokenizer {
         self.scanners.push(scanner);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_block_scanner(
         &mut self,
         start_delimiter: &str,
@@ -159,28 +190,10 @@ impl Tokenizer {
 
             // Try to match complex scanners first (like strings which can contain whitespace)
             for scanner in &self.scanners {
-                match scanner.scan(current_input) {
-                    Ok(Some(token)) => {
-                        // Special handling for scanners with excluded delimiters or line-based scanners
-                        let mut token_len = token.value.len();
-
-                        // For block scanners excluding delimiters, need to find the actual consumed length
-                        if let ScannerType::Block(block_scanner) = scanner {
-                            if !block_scanner.includes_delimiters() {
-                                // Calculate full length including delimiters
-                                if let Ok(Some(end_pos)) = block_scanner.find_match_end(current_input) {
-                                    token_len = end_pos;
-                                }
-                            }
-                        }
-
-                        // For line scanners excluding delimiters, need to calculate correct length
-                        if let ScannerType::Eol(eol_scanner) = scanner {
-                            if !eol_scanner.includes_delimiter() {
-                                // The full match length is the token length plus the delimiter length
-                                token_len = token_len + eol_scanner.delimiter().len();
-                            }
-                        }
+                match scanner.scan_with_context(current_input) {
+                    Ok(Some(scan_match)) => {
+                        let token_len = scan_match.consumed_len;
+                        let token = scan_match.token;
 
                         // Track position if configured
                         let token_with_position = if self.config.track_token_positions {
@@ -196,16 +209,7 @@ impl Tokenizer {
                         tokens.push(token_with_position);
 
                         // Advance the iterator and update positions
-                        for _ in 0..token_len {
-                            if let Some((_, char)) = chars.next() {
-                                if char == '\n' {
-                                    current_line += 1;
-                                    current_column = 1;
-                                } else {
-                                    current_column += 1;
-                                }
-                            }
-                        }
+                        Self::advance_cursor(&mut chars, token_len, &mut current_line, &mut current_column);
                         matched = true;
                         break;
                     }

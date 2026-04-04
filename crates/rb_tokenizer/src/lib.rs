@@ -17,7 +17,7 @@ mod tests {
     #[test]
     fn test_debug_utils() {
         let mut tokenizer = Tokenizer::new();
-        tokenizer.add_regex_scanner(r"^\d+", "Number", None);
+        tokenizer.add_regex_scanner(r"^\d+", "Number", None).unwrap();
         tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
 
         let input = "123 + 456";

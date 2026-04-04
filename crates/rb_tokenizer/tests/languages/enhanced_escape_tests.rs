@@ -106,9 +106,9 @@ fn get_js_style_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner("/", "Operator", Some("Divide"));
 
     // Regular expressions
-    tokenizer.add_regex_scanner(r"^(true|false|null|undefined)\b", "Literal", None);
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_$][a-zA-Z0-9_$]*", "Identifier", None);
-    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None);
+    tokenizer.add_regex_scanner(r"^(true|false|null|undefined)\b", "Literal", None).unwrap();
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_$][a-zA-Z0-9_$]*", "Identifier", None).unwrap();
+    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None).unwrap();
 
     tokenizer
 }
@@ -182,8 +182,8 @@ fn get_html_style_tokenizer() -> Tokenizer {
     tokenizer.add_scanner(Box::new(entity_scanner));
 
     // Regular HTML tokens
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_-]*", "Identifier", None);
-    tokenizer.add_regex_scanner(r"^=", "Equals", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_-]*", "Identifier", None).unwrap();
+    tokenizer.add_regex_scanner(r"^=", "Equals", None).unwrap();
 
     tokenizer
 }
@@ -256,7 +256,7 @@ fn get_c_style_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner(";", "Semicolon", None);
     tokenizer.add_symbol_scanner("{", "Braces", Some("Open"));
     tokenizer.add_symbol_scanner("}", "Braces", Some("Close"));
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
 
     tokenizer
 }
@@ -310,7 +310,7 @@ fn get_ruby_style_tokenizer() -> Tokenizer {
     tokenizer.add_scanner(Box::new(sq_string_scanner));
 
     // Regular tokens
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
     tokenizer.add_symbol_scanner(";", "Semicolon", None);
 
     tokenizer

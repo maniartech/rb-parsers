@@ -11,8 +11,8 @@ fn get_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    tokenizer.add_regex_scanner(r"^\d+", "Number", None);
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None);
+    tokenizer.add_regex_scanner(r"^\d+", "Number", None).unwrap();
+    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
     tokenizer.add_symbol_scanner("(", "Operator", Some("OpenParen"));
     tokenizer.add_symbol_scanner(")", "Operator", Some("CloseParen"));
 
