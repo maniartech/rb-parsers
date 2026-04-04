@@ -10,6 +10,7 @@ The design must support:
 - line and column display for humans
 - primary and secondary labels
 - multi-span diagnostics
+- hierarchical enclosing-region context
 - synthetic or missing-token positions used by parser recovery
 - snippet extraction for terminal and plain-text renderers
 
@@ -49,6 +50,8 @@ Additional types:
 - `SpanLabel`
 - `LabelStyle`
 - `SnippetRequest`
+- `ContextScope`
+- `DiagnosticContextRegion`
 
 ## Requirements
 
@@ -58,6 +61,8 @@ Additional types:
 4. The model must support empty spans for insertion points and EOF positions.
 5. The model must support synthetic spans for parser recovery and missing-token diagnostics.
 6. The model must support multiple labels in a single diagnostic.
+7. The model must support the immediate owning region for a diagnostic site.
+8. The model must support relevant ancestor scopes so renderers can show hierarchical context when useful.
 
 ## Labels
 
@@ -84,6 +89,47 @@ Usage examples:
 - primary: the actual parse failure site
 - secondary: the opening delimiter that explains the failure
 - context: a recovery anchor or related token
+
+## Context Regions and Scope Hierarchies
+
+Good parser diagnostics often need more than the failing token span.
+
+Example:
+
+- inside an object, parser expected `:` but found a string
+- the primary location is the unexpected string
+- the immediate owning region is the object span
+- the parent region may be an array item or a larger enclosing object
+
+The framework should be able to capture this structure explicitly so renderers can show the right surrounding region without guessing.
+
+Likely shapes:
+
+```rust
+pub enum ScopeKind {
+    File,
+    Object,
+    Array,
+    Block,
+    Call,
+    Expression,
+    Custom(&'static str),
+}
+
+pub struct ContextScope {
+    pub kind: ScopeKind,
+    pub span: SourceSpan,
+    pub label: Option<String>,
+}
+
+pub struct DiagnosticContextRegion {
+    pub focus: DiagnosticLocation,
+    pub owning_scope: Option<ContextScope>,
+    pub ancestors: Vec<ContextScope>,
+}
+```
+
+Best practice is not to attach the full ancestor tree to every message indiscriminately. The model should allow it, and renderers should choose the most helpful level of detail.
 
 ## Synthetic and Missing Locations
 
@@ -117,6 +163,7 @@ Requirements:
 2. multiline spans must degrade gracefully in narrow terminals
 3. snippet extraction must preserve tabs/newlines consistently
 4. renderers must handle missing source text without crashing
+5. renderers must be able to focus on the smallest useful region while still knowing the owning and ancestor scopes
 
 ## Tokenizer Integration
 
@@ -136,6 +183,14 @@ Parser will need more advanced cases:
 - ambiguity regions
 - precedence conflict explanations
 - recovery windows that cover multiple consumed tokens
+- owning-scope and ancestor-scope context for nested structures
+
+Typical parser-grade best practice is:
+
+1. primary span points to the precise failure site
+2. secondary labels point to structurally relevant anchors
+3. enclosing region metadata identifies the smallest container that gives the failure meaning
+4. ancestor scope metadata is available for advanced renderers and debugging tools
 
 ## Open Questions
 
@@ -143,3 +198,4 @@ Parser will need more advanced cases:
 2. Should spans be half-open internally and converted only for rendering?
 3. Should snippet extraction live in `rb_common` or in a separate rendering helper module?
 4. Do we need a dedicated representation for token ranges in addition to source spans?
+5. How many ancestor scopes should terminal renderers show by default before output becomes noisy?

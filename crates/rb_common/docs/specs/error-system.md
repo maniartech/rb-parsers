@@ -7,15 +7,28 @@ Define a shared, elegant, code-based error and diagnostics system for the Rust P
 This document is the umbrella spec. The detailed companion specs are:
 
 1. `source-spans-and-labels.md`
-2. `suggestions-and-fixes.md`
-3. `diagnostics-runtime.md`
-4. `error-catalog-and-compatibility.md`
+2. `recovery-and-error-boundaries.md`
+3. `suggestions-and-fixes.md`
+4. `diagnostics-runtime.md`
+5. `error-catalog-and-compatibility.md`
+
+Supporting platform specs:
+
+1. `renderers-and-output.md`
+2. `environment-detection.md`
+
+Hinting-specific guidance:
+
+1. `automatic-hinting.md`
 
 The system should support:
 
 - structured error codes
 - rich human guidance with notes and help text
 - optional hints associated with specific errors
+- high-quality automatic fallback hints when user-defined hints are absent
+- hierarchical context ranges and ancestor scope information for diagnostics
+- continue-on-error workflows with explicit recovery boundaries and resume rules
 - machine-readable JSON-style output
 - terminal rendering with color when appropriate
 - plain rendering for logs and non-color environments
@@ -36,8 +49,12 @@ The system should support:
 4. The system must support stable error codes for documentation and testing.
 5. The library must not hardcode stderr output inside low-level components.
 6. Developers must be able to attach optional hints to an error when guidance is useful.
-7. Error definitions should be template-backed so all known errors can be listed in one place.
-8. The system should make it possible to generate user-facing documentation from the same template catalog used by the code.
+7. When explicit hints are absent, the framework should be able to synthesize high-quality contextual fallback hints.
+8. The automatic hinting system must prefer silence over generic or low-confidence garbage.
+9. Error definitions should be template-backed so all known errors can be listed in one place.
+10. The system should make it possible to generate user-facing documentation from the same template catalog used by the code.
+11. Diagnostics must be able to carry enough structural context for renderers to show the immediate failure region, the owning region, and relevant ancestors.
+12. Tokenizer and parser must support configurable continue-on-error behavior with explicit recovery boundaries rather than blind best-effort continuation.
 
 ## Terminology
 
@@ -60,11 +77,39 @@ They are distinct from other diagnostic fields:
 
 Hints must be optional because not every error benefits from guidance. However, the system should make them easy to attach so language authors can provide better UX where it matters.
 
+When user-authored hints are not present, the framework should be able to generate fallback hints from structured context such as:
+
+- the error code or template
+- spans and labels
+- expected-versus-found token information
+- tokenizer or parser recovery actions
+- subsystem-specific hint providers
+
 Examples of good hints:
 
 - "Add a closing `}` before the end of the block."
 - "Prefix the regex with `^` explicitly to make the intention clear."
 - "If this token should be allowed in your language, register a scanner for it before the fallback identifier scanner."
+
+Examples of unacceptable fallback hints:
+
+- "Check your syntax."
+- "There may be an issue near this code."
+- repeating the message text without adding concrete guidance
+
+## Hint Sources and Precedence
+
+Hints should come from a clear precedence order.
+
+Recommended order:
+
+1. explicit user-authored diagnostic hints
+2. template default hints
+3. subsystem-specific automatic hint providers
+4. framework-level generic providers only when they can still produce concrete, contextual advice
+5. no hint at all when quality is too low
+
+The framework should never force a generic hint just to ensure every diagnostic has one.
 
 ## Template-Backed Error Definitions
 
