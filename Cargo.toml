@@ -5,6 +5,7 @@ edition = "2021"
 
 [workspace]
 members = [
+    "crates/rb_common",
     "crates/rb_tokenizer",
     "crates/rb_parser",
     "crates/visitor",
