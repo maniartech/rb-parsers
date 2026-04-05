@@ -13,8 +13,9 @@ The goal is to agree on shared cross-crate primitives before they are pushed int
 5. Parser core semantics such as choice, commitment, backtracking, and recovery interaction
 6. Parser execution and consumption models
 7. Syntax tree representation and materialization
-8. Renderers for terminal, plain-text logs, and JSON output
-9. Host environment detection such as color/no-color behavior
+8. Portable grammar IR and multi-target backend direction
+9. Renderers for terminal, plain-text logs, and JSON output
+10. Host environment detection such as color/no-color behavior
 
 ## Current Spec Set
 
@@ -24,15 +25,16 @@ The goal is to agree on shared cross-crate primitives before they are pushed int
 4. [Parser Core Semantics](parser-core-semantics.md)
 5. [Parser Execution and Consumption Models](parser-execution-and-consumption-models.md)
 6. [Syntax Tree and Materialization](syntax-tree-and-materialization.md)
-7. [Automatic Hinting](automatic-hinting.md)
-8. [Source Spans and Labels](source-spans-and-labels.md)
-9. [Recovery and Error Boundaries](recovery-and-error-boundaries.md)
-10. [Suggestions and Fixes](suggestions-and-fixes.md)
-11. [Diagnostics Runtime](diagnostics-runtime.md)
-12. [Error Catalog and Compatibility](error-catalog-and-compatibility.md)
-13. [Renderers and Output](renderers-and-output.md)
-14. [Environment Detection](environment-detection.md)
-15. [Tokenizer and Parser Integration Guidelines](tokenizer-parser-integration-guidelines.md)
+7. [Portable Grammar IR and Multi-Target Backends](portable-grammar-ir-and-multi-target-backends.md)
+8. [Automatic Hinting](automatic-hinting.md)
+9. [Source Spans and Labels](source-spans-and-labels.md)
+10. [Recovery and Error Boundaries](recovery-and-error-boundaries.md)
+11. [Suggestions and Fixes](suggestions-and-fixes.md)
+12. [Diagnostics Runtime](diagnostics-runtime.md)
+13. [Error Catalog and Compatibility](error-catalog-and-compatibility.md)
+14. [Renderers and Output](renderers-and-output.md)
+15. [Environment Detection](environment-detection.md)
+16. [Tokenizer and Parser Integration Guidelines](tokenizer-parser-integration-guidelines.md)
 
 ## Working Rule
 

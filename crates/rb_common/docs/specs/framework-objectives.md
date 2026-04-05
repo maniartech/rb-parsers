@@ -17,12 +17,15 @@ When a user builds a parser with `rb_parsers`, the result should be:
 - strong in framework-generated fallback hints when user-authored hints are absent
 - pleasant to build with, test, debug, and extend
 - approachable enough that a novice Rust programmer can build a serious parser without learning parser engine internals first
+- reusable across host languages from one language definition when that materially reduces developer effort
 
 The framework should aim to produce parsers that are not only fast, but also elegant to use and trustworthy in production tooling.
 
 It should also make it easy to support real language variation such as versioned syntax, strict versus tolerant modes, and controlled feature combinations without forcing grammar authors into copy-pasted parser forks.
 
 It should also support multiple serious consumption styles, including tree-oriented usage, visitor-style traversal, event streams, and future incremental tooling, without forcing every user into the same parser surface.
+
+It should also make it possible to define one language or mini-DSL once and reuse or emit it across multiple host languages when that avoids repeated porting work.
 
 The overall product direction should be: extremely easy defaults and a fast path for common parsers, with more advanced power available through rule-based configuration that remains learnable and implementable.
 
@@ -85,12 +88,14 @@ This means:
 - behavior should be testable and debuggable
 - diagnostics should help framework users author grammars and integrations correctly
 - novice Rust programmers should be able to author useful and eventually sophisticated parsers without first learning memoization, cut placement, or parser-recovery internals
+- grammar authors should not need to reimplement the same DSL parser separately in every host language unless they explicitly choose backend-specific specialization
 - common tasks should be straightforward without hiding important control from advanced users
 - version, strictness, and feature-profile configuration should be simple for common cases and structured for advanced cases
 - default parser usage should be simple, while advanced consumption models such as event or incremental workflows remain available when justified
 - the simplest useful parser should require very little setup
 - the best-documented path should also be the safest path for performance and diagnostics
 - common grammar shapes such as delimited lists, grouped forms, and precedence-based expressions should have obvious combinators with good defaults
+- portable grammar authoring and multi-target emission should reduce duplication rather than introducing a second, harder framework to learn
 - advanced behavior should come from understandable rules and structured composition rather than opaque magic
 - users should be able to grow from the easy path to the advanced path without needing to relearn the framework from scratch
 
@@ -115,6 +120,8 @@ If the framework claims to outperform others, that claim should be grounded in r
 - output modes suitable for CLI, logs, editors, and CI
 - first-class support for multi-profile parsing across versions, modes, and dialect-like feature sets
 - first-class support for multiple parser consumption models, including editor and streaming-oriented use cases
+- a future path to backend-neutral grammar reuse and non-Rust parser backends when that reduces total developer effort
+- a preference for Rust-backed portability surfaces such as C bindings, WebAssembly, and WASI when they preserve one implementation and reduce maintenance
 - a layered learning curve where the default path is minimal and the advanced path is structured
 - design clarity that allows long-term evolution without API chaos
 
@@ -127,6 +134,7 @@ The framework should not:
 - lock itself into one parser surface syntax too early
 - hide important failure or recovery behavior behind opaque defaults
 - require users to understand cut placement, memoization strategy, or recovery internals before they can build a competent parser
+- bake host-language-specific semantic actions into the canonical portable grammar layer by default
 - make advanced features accessible only through ad hoc flags, boilerplate-heavy setup, or architecture forks
 
 ## Decision Rule
@@ -152,6 +160,7 @@ The rest of the spec set explains how that direction is implemented:
 - `parser-core-semantics.md` defines parser commitment, choice, backtracking, and performance-safe execution semantics
 - `parser-execution-and-consumption-models.md` defines tree, visitor, event, pull, and incremental parser surfaces
 - `syntax-tree-and-materialization.md` defines the CST-first default tree shape, lowering strategy, and performance constraints
+- `portable-grammar-ir-and-multi-target-backends.md` defines how one language definition may later feed Rust and non-Rust backends without forcing duplicate parser authoring
 - `diagnostics-runtime.md` defines shared emission and collection behavior
 - `source-spans-and-labels.md` defines source precision
 - `recovery-and-error-boundaries.md` defines continue-on-error and resynchronization behavior

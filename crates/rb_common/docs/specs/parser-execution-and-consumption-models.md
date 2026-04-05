@@ -38,7 +38,7 @@ Strategy-based design is a good fit for these advanced seams, but it should sit 
 Best practice for this ecosystem is:
 
 1. keep the default public experience tree-oriented because it is easiest for most users
-2. keep traversal and visitor-style APIs inside `rb_parser`, not in a separate crate for now
+2. keep traversal, visitor-style APIs, and basic tree iterators inside `rb_parser`, not in a separate crate for now
 3. design the internal parse engine so it can drive multiple output surfaces
 4. do not force all users into SAX-like or iterator-only parsing just to support advanced use cases
 5. keep incremental parsing as a first-class architectural goal, even if the first implementation is phased in gradually
@@ -188,6 +188,25 @@ Less desirable examples:
 
 Those names blur the line between parsing, materialization, and traversal.
 
+## Package Boundary Guidance
+
+The package split should follow responsibility, not just API count.
+
+Recommended direction for now:
+
+1. keep syntax-tree traversal helpers, visitor traits, walkers, and basic iterators in `rb_parser`
+2. keep parser-core semantics, tree materialization, and traversal ergonomics aligned in one crate while the public API is still stabilizing
+3. do not create a separate visitor or iterator crate yet
+
+Why this is the better default:
+
+- visitors and iterators are direct consumption layers over parser-owned syntax structures
+- splitting them out too early would create churn in public types and ownership boundaries
+- novice users benefit from one obvious crate for parsing and post-parse tree inspection
+- advanced users can still compose their own traversal utilities on top later
+
+A separate package becomes justified only when there is stable, reusable value that is no longer parser-specific, such as language-agnostic tree query tooling with its own lifecycle and versioning needs.
+
 ## Why Strategy Fits Here
 
 The unresolved structure questions are not all-or-nothing choices.
@@ -295,6 +314,43 @@ Examples:
 
 Best practice is to treat iterator APIs as ergonomic wrappers over a more explicit parser/event/tree model.
 
+For this project, that usually means:
+
+- tree child iterators
+- descendant or sibling walkers
+- top-level item iterators over parsed structures
+- event iterators layered over an event-capable core when justified
+
+These should remain convenience surfaces inside `rb_parser`, not a parallel parser package.
+
+### Evaluators and Semantic Execution
+
+Evaluation is a different concern from parsing and traversal.
+
+Examples:
+
+- constant folding
+- expression evaluation
+- interpreter-style execution
+- semantic environment tracking
+- type-directed or symbol-aware analysis passes
+
+These are important, but they are not parser-core responsibilities.
+
+Recommended direction:
+
+1. treat evaluators as a future phase
+2. keep the current architecture ready for them by exposing stable CST traversal, AST lowering, and iterator or visitor surfaces
+3. do not put a general evaluation framework into `rb_parser` until there is a proven cross-language abstraction to justify it
+
+Why:
+
+- evaluation semantics are usually language-specific even when traversal patterns are shared
+- forcing evaluation abstractions into the parser crate too early risks polluting the parsing API with semantic concerns
+- parser competitiveness depends on keeping parser-core responsibilities narrow and fast
+
+If an evaluation framework later becomes justified, the most likely healthy shape is a separate package layered above parsing, for example an `rb_semantics` or `rb_eval`-style crate, rather than a parser submodule that every user must depend on.
+
 ### Incremental Parsing
 
 Incremental parsing matters for editors, language servers, and other interactive tooling.
@@ -398,6 +454,7 @@ Visitor support should be present, but not overemphasized as the whole architect
 Best practice:
 
 - support tree walking helpers and visitor traits for AST and CST analysis
+- support iterator-based inspection helpers alongside visitors so users do not need to implement a trait for simple traversal
 - keep traversal APIs composable with spans, diagnostics, and profile metadata
 - avoid requiring every consumer to implement a visitor just to inspect parse results
 
@@ -486,3 +543,4 @@ It also supports the intended learning curve: learn the simple tree path first, 
 4. Should top-level-item iteration be modeled as a pull parser, an iterator over parse results, or a specialized grammar facility?
 5. Which of these choices should be expressed as built-in strategies versus fixed framework defaults?
 6. Should incremental parsing use a distinct top-level type, or a stateful mode/session layered over `Parser`?
+7. At what point would a separate semantics or evaluation crate have enough stable cross-language value to justify extraction?

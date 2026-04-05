@@ -35,6 +35,7 @@ The current spec set covers:
 - parser-core semantics such as ordered choice, commitment, backtracking, and performance-safe defaults
 - parser execution and consumption models such as tree, visitor, event, pull, and incremental parsing
 - syntax-tree representation, CST-first defaults, AST lowering, and performance-constrained materialization
+- portable grammar IR and multi-target backend direction for reducing repeated DSL porting effort
 - source spans, labels, hierarchical context regions, and parser-oriented location modeling
 - structured suggestions and fixes
 - diagnostics runtime and sink behavior

@@ -132,6 +132,50 @@ That means:
 
 The shared design for parser execution semantics should live in `rb_common/docs/specs/parser-core-semantics.md`.
 
+## Backend-neutral direction
+
+The long-term direction should minimize repeated language-porting effort.
+
+That means one language definition should eventually be able to drive:
+
+- the Rust runtime backend used by this workspace
+- future emitted or generated parsers in other host languages
+- backend-specific packaging only where a target runtime genuinely needs it
+
+The key architectural rule is that the canonical grammar model should stay backend-neutral.
+
+That means:
+
+- grammar structure, syntax kinds, precedence, profile guards, and recovery boundaries should lower into a portable grammar IR
+- Rust should remain the first and richest reference backend while the IR stabilizes
+- future non-Rust targets should compile from the same normalized grammar description rather than from duplicated grammar authoring
+- host-language-specific semantic actions should not become the default way to express syntax meaning in the canonical grammar layer
+
+Where practical, portability should prefer Rust-backed delivery surfaces first:
+
+- direct Rust library output
+- C bindings for native embedding
+- WebAssembly for browser or embedder scenarios
+- WASI for sandboxed or component-oriented deployment
+
+Host-native emitted parser source should remain available when required, but it should not be the only portability story.
+
+Conceptually:
+
+```rust
+let ir = define_json_grammar().lower_to_ir(&profile)?;
+
+let rust_parser = RustBackend::default().compile(&ir)?;
+let c_api = CAbiBackend::default().package(&ir)?;
+let wasm_module = WasmBackend::default().package(&ir)?;
+```
+
+The exact API may differ, but the direction matters: grammar authoring should stay portable first, with host-specific escape hatches kept explicit and clearly non-portable.
+
+Evaluation and interpreter frameworks should remain a later layer on top of this. They are usually less portable than parsing and should not distort the core grammar model prematurely.
+
+The shared design for this should live in `rb_common/docs/specs/portable-grammar-ir-and-multi-target-backends.md`.
+
 ## Suggested structure-first syntax
 
 If the same declarative grammar should drive CST, AST lowering, event output, and incremental parsing, then the grammar layer should describe syntax structure first, not domain AST values directly.
@@ -145,6 +189,8 @@ That suggests a syntax built around a small set of structural primitives:
 - existing combinators such as `seq!`, `one_of!`, `between`, `list`, and `pratt`
 
 In this model, the grammar describes the parse shape once, and different consumers decide what to do with it later.
+
+That same separation is also what makes future multi-target emission plausible: structure-first grammars are much easier to normalize into a portable IR than grammars that depend on host-language closures in the rule body.
 
 Conceptually:
 
