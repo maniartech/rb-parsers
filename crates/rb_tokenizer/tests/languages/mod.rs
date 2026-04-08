@@ -2,6 +2,8 @@
 #[cfg(test)]
 mod ejs_tests;
 #[cfg(test)]
+mod enhanced_escape_tests;
+#[cfg(test)]
 mod json_tests;
 #[cfg(test)]
 mod simple_expression_tests;

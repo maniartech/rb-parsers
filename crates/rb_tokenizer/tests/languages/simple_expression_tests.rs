@@ -11,16 +11,18 @@ fn get_tokenizer() -> Tokenizer {
     };
     let mut tokenizer = Tokenizer::with_config(config);
 
-    tokenizer.add_regex_scanner(r"^\d+", "Number", None).unwrap();
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+    tokenizer.add_number_literal_scanner("Number", None);
+    tokenizer.add_char_class_scanner("a-zA-Z_", Some("a-zA-Z0-9_"), "Identifier", None);
     tokenizer.add_symbol_scanner("(", "Operator", Some("OpenParen"));
     tokenizer.add_symbol_scanner(")", "Operator", Some("CloseParen"));
 
     // Operators
-    tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
-    tokenizer.add_symbol_scanner("-", "Operator", Some("Minus"));
-    tokenizer.add_symbol_scanner("*", "Operator", Some("Multiply"));
-    tokenizer.add_symbol_scanner("/", "Operator", Some("Divide"));
+    tokenizer.add_operator_scanner_with_subtypes("Operator", &[
+        ("+", "Plus"),
+        ("-", "Minus"),
+        ("*", "Multiply"),
+        ("/", "Divide"),
+    ]);
 
     tokenizer
 }

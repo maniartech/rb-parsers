@@ -1,4 +1,5 @@
-use rb_tokenizer::{Tokenizer, TokenizerConfig};
+use rb_tokenizer::{Tokenizer, TokenizerConfig, WhitespaceScanner};
+use rb_tokenizer::scanners::block_scanner::BlockScanner;
 
 fn get_json_tokenizer() -> Tokenizer {
     let config = TokenizerConfig {
@@ -17,14 +18,22 @@ fn get_json_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner(":", "Colon", None);
     tokenizer.add_symbol_scanner(",", "Comma", None);
 
-    // Strings
-    tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None).unwrap();
+    // Strings — BlockScanner correctly handles \uXXXX Unicode escapes per the JSON spec.
+    let mut string_scanner = BlockScanner::new("\"", "\"", "String", None, false, false, true);
+    string_scanner.add_simple_escape('\\');
+    string_scanner.add_pattern_escape(r"\\u[0-9a-fA-F]{4}").unwrap();
+    tokenizer.add_scanner(Box::new(string_scanner));
 
-    // Numbers
-    tokenizer.add_regex_scanner(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?", "Number", None).unwrap();
+    // Numbers — JSON-spec compliant: no leading zeros, optional fraction and exponent.
+    // The leading minus is part of the number literal per the JSON grammar.
+    tokenizer.add_regex_scanner(
+        r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?",
+        "Number",
+        None,
+    ).unwrap();
 
     // Literals
-    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None).unwrap();
+    tokenizer.add_keyword_scanner("Literal", &["true", "false", "null"]);
 
     tokenizer
 }
@@ -73,12 +82,11 @@ mod json_tests {
 
     #[test]
     fn test_json_with_whitespace_tokens() {
+        // Use an explicit WhitespaceScanner instead of the built-in config flag.
+        // WhitespaceScanner::uniform emits all whitespace as a single "Whitespace" token,
+        // which is correct for JSON where all whitespace is insignificant.
         let mut tokenizer = get_json_tokenizer();
-        // Modify config to tokenize whitespace
-        *tokenizer.config_mut() = TokenizerConfig {
-            tokenize_whitespace: true,
-            ..tokenizer.config().clone()
-        };
+        tokenizer.add_whitespace_scanner(WhitespaceScanner::uniform("Whitespace"));
 
         let json_input = r#"{"key": "value"}"#;
         let result = tokenizer.tokenize(json_input).expect("Tokenization failed");
@@ -114,5 +122,36 @@ mod json_tests {
             println!("Expected JSON parsing errors: {:?}", errors);
             assert!(!errors.is_empty(), "Should contain at least one error");
         }
+    }
+
+    #[test]
+    fn test_json_numbers() {
+        let tokenizer = get_json_tokenizer();
+        for (input, expected) in [
+            ("-42",     "-42"),
+            ("3.14",    "3.14"),
+            ("6.02e23", "6.02e23"),
+            ("-1.5e-3", "-1.5e-3"),
+            ("0",       "0"),
+            ("1e+10",   "1e+10"),
+        ] {
+            let result = tokenizer.tokenize(input).unwrap();
+            assert_eq!(result.len(), 1, "Expected one Number token for '{input}'");
+            assert_eq!(result[0].token_type, "Number");
+            assert_eq!(result[0].value, expected);
+        }
+    }
+
+    #[test]
+    fn test_json_string_unicode_escapes() {
+        let tokenizer = get_json_tokenizer();
+        // \u0041 = 'A', \u0042 = 'B'
+        let input = r#""\u0041\u0042""#;
+        let result = tokenizer.tokenize(input).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].token_type, "String");
+        // Raw escape sequences are preserved; Unicode decoding is the parser's job.
+        assert!(result[0].value.contains(r"\u0041"));
+        assert!(result[0].value.contains(r"\u0042"));
     }
 }

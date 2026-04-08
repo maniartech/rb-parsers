@@ -11,9 +11,9 @@ fn get_ejs_tokenizer() -> Tokenizer {
 
     // HTML content fallback (adding this first so it has lowest priority)
     tokenizer.add_closure_scanner(Box::new(|input: &str| -> Result<Option<rb_tokenizer::tokens::Token>, rb_tokenizer::tokens::TokenizationError> {
-        // If the input starts with any part of an EJS tag, let the block scanners handle it
-        if input.starts_with("<%") || input.starts_with("<%=") || input.starts_with("<%#") ||
-           input.starts_with("<%-") || input.starts_with("%>") {
+        // If the input starts with an EJS tag opener or the closing `%>`,
+        // let the dedicated block scanners handle it.
+        if input.starts_with("<%") || input.starts_with("%>") {
             return Ok(None);
         }
 

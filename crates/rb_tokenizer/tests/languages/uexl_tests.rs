@@ -18,35 +18,32 @@ fn get_tokenizer() -> Tokenizer {
     tokenizer.add_symbol_scanner("]", "Bracket", Some("CloseBracket"));
     tokenizer.add_symbol_scanner(",", "Comma", None);
 
-    // Arithmetic Operators
-    tokenizer.add_symbol_scanner("+", "Operator", Some("Plus"));
-    tokenizer.add_symbol_scanner("-", "Operator", Some("Minus"));
-    tokenizer.add_symbol_scanner("*", "Operator", Some("Multiply"));
-    tokenizer.add_symbol_scanner("/", "Operator", Some("Divide"));
-    tokenizer.add_symbol_scanner("%", "Operator", Some("Modulo"));
-
-    // Comparison Operators
-    tokenizer.add_symbol_scanner("==", "Operator", Some("Equal"));
-    tokenizer.add_symbol_scanner("!=", "Operator", Some("NotEqual"));
-    tokenizer.add_symbol_scanner("<", "Operator", Some("LessThan"));
-    tokenizer.add_symbol_scanner("<=", "Operator", Some("LessThanOrEqual"));
-    tokenizer.add_symbol_scanner(">", "Operator", Some("GreaterThan"));
-    tokenizer.add_symbol_scanner(">=", "Operator", Some("GreaterThanOrEqual"));
-
-    // Logical Operators
-    tokenizer.add_symbol_scanner("&&", "Operator", Some("And"));
-    tokenizer.add_symbol_scanner("||", "Operator", Some("Or"));
-    tokenizer.add_symbol_scanner("!", "Operator", Some("Not"));
-
-    // Bitwise Operators
-    tokenizer.add_symbol_scanner("&", "Operator", Some("BitwiseAnd"));
-    tokenizer.add_symbol_scanner("^", "Operator", Some("BitwiseXor"));
-    tokenizer.add_symbol_scanner("~", "Operator", Some("BitwiseNot"));
-    tokenizer.add_symbol_scanner("<<", "Operator", Some("BitwiseLeftShift"));
-    tokenizer.add_symbol_scanner(">>", "Operator", Some("BitwiseRightShift"));
+    // Operators — OperatorScanner tries longest match first, which fixes the
+    // < vs <= and > vs >= ambiguity present when using individual SymbolScanners.
+    // Note: | and || are handled by the Pipe scanner below.
+    tokenizer.add_operator_scanner_with_subtypes("Operator", &[
+        ("==", "Equal"),
+        ("!=", "NotEqual"),
+        (">=", "GreaterThanOrEqual"),
+        (">>", "BitwiseRightShift"),
+        (">" , "GreaterThan"),
+        ("<=", "LessThanOrEqual"),
+        ("<<", "BitwiseLeftShift"),
+        ("<" , "LessThan"),
+        ("&&", "And"),
+        ("!" , "Not"),
+        ("&" , "BitwiseAnd"),
+        ("^" , "BitwiseXor"),
+        ("~" , "BitwiseNot"),
+        ("+" , "Plus"),
+        ("-" , "Minus"),
+        ("*" , "Multiply"),
+        ("/" , "Divide"),
+        ("%" , "Modulo"),
+    ]);
 
     // Literal Keywords
-    tokenizer.add_regex_scanner(r"^(true|false|null)\b", "Literal", None).unwrap();
+    tokenizer.add_keyword_scanner("Literal", &["true", "false", "null"]);
 
     // Raw String Literals in the form of: `string`, do not escape characters
     tokenizer.add_regex_scanner(r#"^`([^`]|\\.)*`"#, "String", None).unwrap();
@@ -58,7 +55,7 @@ fn get_tokenizer() -> Tokenizer {
     tokenizer.add_regex_scanner(r#"^"([^"\\]|\\.)*""#, "String", None).unwrap();
 
     // Identifier
-    tokenizer.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Identifier", None).unwrap();
+    tokenizer.add_char_class_scanner("a-zA-Z_", Some("a-zA-Z0-9_"), "Identifier", None);
 
     // Variable starts with $ and followed by letters, numbers, or underscores
     tokenizer.add_regex_scanner(r"^\$[a-zA-Z0-9_]*", "Variable", None).unwrap();
