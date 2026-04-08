@@ -4,7 +4,11 @@ pub mod tokenizers;
 pub mod utils;
 
 // Re-export main types at crate root for easier access
-pub use tokenizers::{Tokenizer, TokenizerConfig};
+pub use tokenizers::{BinaryToken, BinaryTokenizer, Tokenizer, TokenizerConfig};
+pub use scanners::{
+    BinaryScanner, CharClassScanner, ContextualClosureScanner, ContextualScanner,
+    IndentationScanner, KeywordScanner, NumberLiteralScanner, ScanContext,
+};
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
