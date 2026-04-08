@@ -6,10 +6,12 @@ use super::contextual_scanner::ContextualScanner;
 use super::eol_scanner::EolScanner;
 use super::keyword_scanner::KeywordScanner;
 use super::number_literal_scanner::NumberLiteralScanner;
+use super::operator_scanner::OperatorScanner;
 use super::regex_scanner::RegexScanner;
 use super::scan_context::ScanContext;
 use super::scanner::ScanMatch;
 use super::symbol_scanner::SymbolScanner;
+use super::whitespace_scanner::WhitespaceScanner;
 use super::{ClosureScanner, Scanner};
 
 pub enum ScannerType {
@@ -29,6 +31,10 @@ pub enum ScannerType {
     /// A scanner that receives mutable access to [`ScanContext`], enabling
     /// lexer-mode switching and context-sensitive tokenization.
     Contextual(Box<dyn ContextualScanner>),
+    /// Longest-match operator scanner with no word-boundary check.
+    Operator(OperatorScanner),
+    /// Configurable whitespace scanner (uniform, split on newline, or with line continuation).
+    Whitespace(WhitespaceScanner),
 }
 
 pub trait CallbackScanner {
@@ -57,6 +63,8 @@ impl Scanner for ScannerType {
             ScannerType::Keyword(scanner)       => scanner.scan(input),
             ScannerType::CharClass(scanner)     => scanner.scan(input),
             ScannerType::NumberLiteral(scanner) => scanner.scan(input),
+            ScannerType::Operator(scanner)       => scanner.scan(input),
+            ScannerType::Whitespace(scanner)     => scanner.scan(input),
             // Contextual scanners can't be called without a ScanContext.
             // Use scan_contextually() instead.  Returning Ok(None) here
             // makes them invisible to the non-contextual tokenize() path.
@@ -76,6 +84,8 @@ impl Scanner for ScannerType {
             ScannerType::Keyword(scanner)       => scanner.scan_with_context(input),
             ScannerType::CharClass(scanner)     => scanner.scan_with_context(input),
             ScannerType::NumberLiteral(scanner) => scanner.scan_with_context(input),
+            ScannerType::Operator(scanner)       => scanner.scan_with_context(input),
+            ScannerType::Whitespace(scanner)     => scanner.scan_with_context(input),
             ScannerType::Contextual(_)          => Ok(None),
         }
     }

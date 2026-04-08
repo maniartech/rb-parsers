@@ -1,16 +1,13 @@
 use super::scanner::Scanner;
+use super::word_boundary::WordBoundaryDef;
 use crate::tokens::{Token, TokenizationError};
-
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
-}
 
 /// Matches keywords (reserved words) with an automatic **word-boundary check**.
 ///
 /// Unlike [`SymbolScanner`](crate::scanners::SymbolScanner), `KeywordScanner` refuses to
-/// match when the character immediately following the keyword is a word character
-/// (`[A-Za-z0-9_]`).  This prevents `if` from matching inside `ifdef`, `class` from
-/// matching inside `classname`, etc.
+/// match when the character immediately following the keyword is a word character.
+/// This prevents `if` from matching inside `ifdef`, `class` from matching inside
+/// `classname`, etc.
 ///
 /// Keywords are tried in **longest-first order** so `elsif` is preferred over `else`
 /// when both are registered.
@@ -31,10 +28,16 @@ fn is_word_char(c: char) -> bool {
 ///
 /// # Custom word-boundary characters
 ///
-/// For languages where `$` or `!` can appear in identifiers, override the default
-/// word characters:
+/// Use a [`WordBoundaryDef`] preset or provide a custom predicate:
 ///
 /// ```rust,ignore
+/// use rb_tokenizer::scanners::{KeywordScanner, WordBoundaryDef};
+///
+/// // Ruby — `save!` and `empty?` must not match keyword `save` / `empty`
+/// let scanner = KeywordScanner::new("Keyword", &["def", "end"])
+///     .with_word_boundary_def(WordBoundaryDef::ruby());
+///
+/// // Custom predicate (backward-compatible builder)
 /// let scanner = KeywordScanner::new("Keyword", &["def", "end"])
 ///     .with_word_boundary(|c| c.is_alphanumeric() || c == '_' || c == '?' || c == '!');
 /// ```
@@ -42,7 +45,7 @@ pub struct KeywordScanner {
     /// `(keyword_text, token_sub_type)`, sorted longest-first.
     entries: Vec<(String, Option<&'static str>)>,
     token_type: &'static str,
-    word_boundary: Box<dyn Fn(char) -> bool + Send + Sync>,
+    word_boundary: WordBoundaryDef,
 }
 
 impl KeywordScanner {
@@ -54,7 +57,7 @@ impl KeywordScanner {
         Self {
             entries,
             token_type,
-            word_boundary: Box::new(is_word_char),
+            word_boundary: WordBoundaryDef::Default,
         }
     }
 
@@ -76,16 +79,33 @@ impl KeywordScanner {
         Self {
             entries,
             token_type,
-            word_boundary: Box::new(is_word_char),
+            word_boundary: WordBoundaryDef::Default,
         }
     }
 
-    /// Override the word-boundary predicate.
+    /// Override the word-boundary predicate with an arbitrary closure.
     ///
     /// The scanner rejects a keyword match when the character *immediately after* the
-    /// keyword satisfies this function.  The default is `char::is_alphanumeric() || c == '_'`.
+    /// keyword satisfies this function.
+    ///
+    /// For named language presets, prefer [`with_word_boundary_def`](Self::with_word_boundary_def).
     pub fn with_word_boundary(mut self, pred: impl Fn(char) -> bool + Send + Sync + 'static) -> Self {
-        self.word_boundary = Box::new(pred);
+        self.word_boundary = WordBoundaryDef::predicate(pred);
+        self
+    }
+
+    /// Set the word-boundary definition using a [`WordBoundaryDef`] value.
+    ///
+    /// Use a named language preset for the most common cases:
+    ///
+    /// ```rust,ignore
+    /// use rb_tokenizer::scanners::{KeywordScanner, WordBoundaryDef};
+    ///
+    /// KeywordScanner::new("Keyword", &["end", "do"])
+    ///     .with_word_boundary_def(WordBoundaryDef::ruby());
+    /// ```
+    pub fn with_word_boundary_def(mut self, def: WordBoundaryDef) -> Self {
+        self.word_boundary = def;
         self
     }
 }
@@ -98,7 +118,7 @@ impl Scanner for KeywordScanner {
             }
             // Word-boundary check: the char right after the keyword must NOT be a word char.
             let rest = &input[keyword.len()..];
-            if rest.chars().next().is_some_and(|c| (self.word_boundary)(c)) {
+            if rest.chars().next().is_some_and(|c| self.word_boundary.is_word_char(c)) {
                 continue;
             }
             return Ok(Some(Token {

@@ -2,7 +2,9 @@ use crate::scanners::char_class_scanner::CharClassScanner;
 use crate::scanners::contextual_scanner::{ContextualClosureScanner, ContextualScanner};
 use crate::scanners::keyword_scanner::KeywordScanner;
 use crate::scanners::number_literal_scanner::NumberLiteralScanner;
+use crate::scanners::operator_scanner::OperatorScanner;
 use crate::scanners::scan_context::ScanContext;
+use crate::scanners::whitespace_scanner::WhitespaceScanner;
 use crate::scanners::{self, BlockScanner, EolScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 use std::cell::RefCell;
@@ -288,6 +290,60 @@ impl Tokenizer {
         self.scanners.push(ScannerType::NumberLiteral(
             NumberLiteralScanner::new(token_type, token_sub_type),
         ));
+    }
+
+    /// Register an [`OperatorScanner`] where all operators share one `token_type`.
+    ///
+    /// Operators are matched **longest-first** with **no word-boundary check**, making
+    /// this the right choice for symbolic operators like `++`, `+=`, `->`, `<<=`.
+    ///
+    /// ```rust,ignore
+    /// tokenizer.add_operator_scanner("Op", &["+=", "-=", "++", "--", "+", "-", "="]);
+    /// ```
+    pub fn add_operator_scanner(&mut self, token_type: &'static str, operators: &[&str]) {
+        self.scanners
+            .push(ScannerType::Operator(OperatorScanner::new(token_type, operators)));
+    }
+
+    /// Register an [`OperatorScanner`] where each operator gets a distinct `token_sub_type`.
+    ///
+    /// ```rust,ignore
+    /// tokenizer.add_operator_scanner_with_subtypes("Op", &[
+    ///     ("<<=", "ShlAssign"),
+    ///     ("<<",  "Shl"),
+    ///     ("<=",  "Le"),
+    ///     ("<",   "Lt"),
+    /// ]);
+    /// ```
+    pub fn add_operator_scanner_with_subtypes(
+        &mut self,
+        token_type: &'static str,
+        operators: &[(&str, &'static str)],
+    ) {
+        self.scanners
+            .push(ScannerType::Operator(OperatorScanner::with_subtypes(token_type, operators)));
+    }
+
+    /// Register a [`WhitespaceScanner`] for whitespace handling.
+    ///
+    /// Use the named constructors on [`WhitespaceScanner`] to choose a mode:
+    ///
+    /// ```rust,ignore
+    /// use rb_tokenizer::WhitespaceScanner;
+    ///
+    /// // Uniform — all whitespace as one token (C, Java, JSON)
+    /// tokenizer.add_whitespace_scanner(WhitespaceScanner::uniform("Whitespace"));
+    ///
+    /// // Split — separate Newline tokens (Go, JavaScript, Ruby, Kotlin)
+    /// tokenizer.add_whitespace_scanner(WhitespaceScanner::split("Whitespace", "Newline"));
+    ///
+    /// // With continuation — split + backslash-newline (C preprocessor, Python, Bash)
+    /// tokenizer.add_whitespace_scanner(WhitespaceScanner::with_continuation(
+    ///     "Whitespace", "Newline", "LineContinuation",
+    /// ));
+    /// ```
+    pub fn add_whitespace_scanner(&mut self, scanner: WhitespaceScanner) {
+        self.scanners.push(ScannerType::Whitespace(scanner));
     }
 
     // Enhanced tokenize method with improved whitespace handling

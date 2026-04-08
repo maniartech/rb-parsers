@@ -7,7 +7,8 @@ pub mod utils;
 pub use tokenizers::{BinaryToken, BinaryTokenizer, Tokenizer, TokenizerConfig};
 pub use scanners::{
     BinaryScanner, CharClassScanner, ContextualClosureScanner, ContextualScanner,
-    IndentationScanner, KeywordScanner, NumberLiteralScanner, ScanContext,
+    IndentationScanner, KeywordScanner, NumberLiteralScanner, OperatorScanner, ScanContext,
+    WhitespaceScanner, WordBoundaryDef,
 };
 
 pub fn add(left: usize, right: usize) -> usize {
