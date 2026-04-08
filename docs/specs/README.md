@@ -28,10 +28,10 @@ programming language**, including:
 |---|---|
 | ASCII / Latin-script languages | Regex scanners with standard patterns |
 | Unicode identifiers (Arabic, CJK, Devanagari, etc.) | Rust `regex` crate supports `\p{ID_Start}`, `\p{ID_Continue}`, `\p{Script=…}` out of the box |
-| Indentation-sensitive (Python, YAML, Haskell) | Register a custom `Scanner` implementation that tracks indent depth; `token_type` names are developer-defined |
+| Indentation-sensitive (Python, YAML, Haskell) | Use the built-in `IndentationScanner::new(indent_type, dedent_type)` registered via `add_contextual_scanner`; run the pipeline with `tokenize_contextual()` |
 | Multi-line / raw strings (Rust, Lua, C++) | `BlockScanner` handles arbitrary delimiter pairs including raw heredoc markers |
-| Operator-heavy languages (APL, Haskell) | `token_type` is `&'static str` — any Unicode symbol is a valid token type string |
-| Languages with significant whitespace | Whitespace tokens are produced when a whitespace scanner is registered; omitted otherwise |
+| Operator-heavy languages (APL, Haskell, C++) | `OperatorScanner` matches multi-character operators longest-first with no word-boundary check; `token_type` is `&'static str` — any Unicode symbol is a valid token type string |
+| Languages with significant whitespace | `WhitespaceScanner::split("Whitespace", "Newline")` emits a distinct `Newline` token the parser can use for ASI; `IndentationScanner` handles full INDENT/DEDENT for indentation-sensitive languages |
 | Mixed-script source (emoji, math symbols, etc.) | `SourceSpan` byte offsets are aligned to Unicode scalar value boundaries; display helpers convert to char counts |
 | Multiple source files / interactive REPL | `SourceId` distinguishes each buffer; `TokenStream` carries the buffer's `source_id` |
 
@@ -91,10 +91,22 @@ When all 12 specs above are implemented the workspace will have:
 - `Token` gains `span: SourceSpan`; `line`/`column` fields removed; `display_line()` / `display_column()` convenience methods added
 - `Tokenizer` gains `source_id: SourceId` field and `with_source_id()` builder
 - `tokenize()` signature becomes `tokenize(&self, input: &str, ctx: &mut DiagnosticsContext) -> Vec<Token>`
+- `tokenize_contextual()` threads a `ScanContext` through all contextual scanners for mode-aware lexing
 - `last_errors()` removed; callers use `ctx.collected()` instead
 - `RegexScanner` no longer uses `eprintln!`; normalization warnings go through `DiagnosticsContext`
 - `rb_tokenizer::catalog` module with `RBT_CATALOG` and `codes::*` constants (human-readable slugs: `RBT-unrecognized-char`, `RBT-unmatched-block`, `RBT-invalid-pattern`, `RBT-unterminated-block`, `RBT-pattern-auto-anchored`, `RBT-error-limit-reached`)
 - `rb_tokenizer::pipeline::TokenStream<'src>` — the canonical tokenizer output / parser input
+- **New scanner types added beyond the original `SymbolScanner`, `RegexScanner`, `BlockScanner`, `EolScanner`, `ClosureScanner`:**
+  - `KeywordScanner` — reserved words with word-boundary enforcement; boundary definition pluggable via `WordBoundaryDef`; `add_keyword_scanner` / `add_keyword_scanner_with_subtypes`
+  - `CharClassScanner` — identifier-style tokens using lead + continuation char-class specs (ASCII ranges or Unicode `\p{...}`); `add_char_class_scanner`
+  - `NumberLiteralScanner` — complete numeric literal lexing (decimal, hex, binary, octal, float, scientific notation, underscore separators); `add_number_literal_scanner`
+  - `OperatorScanner` — longest-match multi-character operator scanning without word-boundary check (covers `++`, `+=`, `->`, `<<=`, etc.); `add_operator_scanner` / `add_operator_scanner_with_subtypes`
+  - `WhitespaceScanner` — configurable whitespace handling: `uniform` (all whitespace as one token), `split` (separate `Newline` token for ASI languages), `with_continuation` (also emits backslash-newline as `LineContinuation`); `add_whitespace_scanner`
+  - `WordBoundaryDef` — reusable, clone-able word-boundary definition for `KeywordScanner`; named presets: `ruby()` (`?!`), `javascript()` (`$`), `css()` (`-`), `r_lang()` (`.` `$`), `lisp()` (`?!+-*/<>=`), `haskell()` (`'`)
+  - `IndentationScanner` — significant-whitespace INDENT/DEDENT emission; registered via `add_contextual_scanner`, runs under `tokenize_contextual()`
+  - `ContextualScanner` trait — mode-switching scanner interface receiving `&mut ScanContext`; `add_contextual_scanner` / `add_contextual_closure`
+  - `ScanContext` — shared mutable state threaded through all contextual scanners in one `tokenize_contextual()` call
+  - `BinaryScanner` trait + `BinaryTokenizer` — byte-level scanner API for binary file formats
 
 **`rb_parser`** (skeleton)
 - `ParseResult` struct

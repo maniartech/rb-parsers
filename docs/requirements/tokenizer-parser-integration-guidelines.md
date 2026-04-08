@@ -36,6 +36,29 @@ Tokenizer should own:
 - lexical warnings and lexical errors
 - delimiter matching rules that are fundamentally lexical
 
+The tokenizer provides the following built-in scanner types. Use the most
+specific type for each task to avoid regressing to ad-hoc regex for things the
+framework already handles:
+
+| Scanner | Register via | Use for |
+|---|---|---|
+| `SymbolScanner` | `add_symbol_scanner` | Exact-string punctuation and fixed operators |
+| `RegexScanner` | `add_regex_scanner` | Patterns with no better dedicated scanner |
+| `BlockScanner` | `add_block_scanner` | Balanced delimiter pairs: strings, block comments, heredocs |
+| `EolScanner` | `add_eol_scanner` | Line comments and preprocessor directives |
+| `ClosureScanner` | `add_closure_scanner` | Inline `Fn(&str)` logic without a separate struct |
+| `CallbackScanner` | `add_callback_scanner` | Trait-based stateless callback |
+| `KeywordScanner` | `add_keyword_scanner` / `add_keyword_scanner_with_subtypes` | Reserved words with word-boundary enforcement; use `with_word_boundary_def(WordBoundaryDef::ruby())` etc. for language-specific boundary rules |
+| `CharClassScanner` | `add_char_class_scanner` | Identifier-style tokens: ASCII ranges or Unicode `\p{…}` lead/continuation classes |
+| `NumberLiteralScanner` | `add_number_literal_scanner` | All numeric literal formats: decimal, hex, binary, octal, float, scientific, underscore separators |
+| `OperatorScanner` | `add_operator_scanner` / `add_operator_scanner_with_subtypes` | Multi-character symbolic operators matched longest-first with no word-boundary check (`++`, `+=`, `->`, `<<=`, etc.) |
+| `WhitespaceScanner` | `add_whitespace_scanner` | Configurable whitespace: `uniform` (all-in-one), `split` (separate `Newline` token for ASI languages), `with_continuation` (backslash-newline as `LineContinuation` for C macros / Python / Bash) |
+| `WordBoundaryDef` | `.with_word_boundary_def(def)` on `KeywordScanner` | Reusable word-boundary definition; named presets: `ruby()`, `javascript()`, `css()`, `r_lang()`, `lisp()`, `haskell()` |
+| `IndentationScanner` | `add_contextual_scanner` | Significant-whitespace INDENT/DEDENT; requires `tokenize_contextual()` |
+| `ContextualScanner` (trait) | `add_contextual_scanner` / `add_contextual_closure` | Mode-switching scanners that share `ScanContext` across one tokenization pass |
+| `BinaryScanner` (trait) | `BinaryTokenizer::add_scanner` | Byte-level binary format parsing |
+| `Scanner` (dyn trait) | `add_scanner` | Custom scanner for anything the above types cannot express |
+
 Tokenizer should not own:
 
 - grammar validation

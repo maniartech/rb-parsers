@@ -92,37 +92,95 @@ pub fn build_my_tokenizer(source_id: SourceId) -> Tokenizer {
         .with_source_id(source_id);
 
     // Register scanners in priority order — first match wins.
-    // Literal patterns: numbers, strings, keywords
-    t.add_regex_scanner(r"^\d+(\.\d+)?",         my_tok::NUMBER,    None).unwrap();
-    t.add_regex_scanner(r#"^"([^"\\]|\\.)*""#,   my_tok::STRING,    None).unwrap();
-    t.add_regex_scanner(r"^true\b",              my_tok::TRUE,      None).unwrap();
-    t.add_regex_scanner(r"^false\b",             my_tok::FALSE,     None).unwrap();
-    t.add_regex_scanner(r"^null\b",              my_tok::NULL,      None).unwrap();
 
-    // Structural tokens
-    t.add_regex_scanner(r"^\{",  my_tok::LBRACE,   None).unwrap();
-    t.add_regex_scanner(r"^\}",  my_tok::RBRACE,   None).unwrap();
-    t.add_regex_scanner(r"^\[",  my_tok::LBRACKET, None).unwrap();
-    t.add_regex_scanner(r"^\]",  my_tok::RBRACKET, None).unwrap();
-    t.add_regex_scanner(r"^:",   my_tok::COLON,    None).unwrap();
-    t.add_regex_scanner(r"^,",   my_tok::COMMA,    None).unwrap();
+    // Keywords — matched with word-boundary check; each gets its own token type
+    t.add_keyword_scanner_with_subtypes("Keyword", &[
+        ("true",  my_tok::TRUE),
+        ("false", my_tok::FALSE),
+        ("null",  my_tok::NULL),
+    ]);
 
-    // Whitespace — omit this registration if you want trivia-free token streams
-    t.add_regex_scanner(r"^\s+", my_tok::WHITESPACE, None).unwrap();
+    // Numbers — hex, binary, octal, float, scientific, underscore separators all handled
+    t.add_number_literal_scanner(my_tok::NUMBER, None);
+
+    // Strings — block scanner handles escape sequences inside the delimiters
+    t.add_block_scanner(r#"""#, r#"""#, my_tok::STRING, Some(BlockScannerConfig {
+        escape_char: Some('\\'),
+        ..Default::default()
+    }));
+
+    // Structural tokens — exact symbol matching, no regex overhead
+    t.add_symbol_scanner("{",  my_tok::LBRACE,   None);
+    t.add_symbol_scanner("}",  my_tok::RBRACE,   None);
+    t.add_symbol_scanner("[",  my_tok::LBRACKET, None);
+    t.add_symbol_scanner("]",  my_tok::RBRACKET, None);
+    t.add_symbol_scanner(":",  my_tok::COLON,    None);
+    t.add_symbol_scanner(",",  my_tok::COMMA,    None);
+
+    // Whitespace — prefer WhitespaceScanner over a raw regex; choose the mode
+    // that matches the language's treatment of newlines:
+    //   uniform("Ws")               — all whitespace = one token (JSON, C, Java)
+    //   split("Ws", "Nl")           — separate Newline token (Go, JavaScript, Ruby)
+    //   with_continuation(...)      — split + backslash-newline = LineContinuation
+    t.add_whitespace_scanner(WhitespaceScanner::uniform(my_tok::WHITESPACE));
 
     t
 }
 ```
 
-**Unicode languages** — the `regex` crate supports Unicode character properties
-natively. For a Python-like language with Unicode identifiers:
+**Language-specific keyword boundaries** — different languages define different
+characters as part of an identifier.  Use [`WordBoundaryDef`] presets so that
+keywords stop matching at the right positions:
 
 ```rust
-t.add_regex_scanner(r"^\p{ID_Start}\p{ID_Continue}*", "Identifier", None).unwrap();
+use rb_tokenizer::scanners::{KeywordScanner, WordBoundaryDef};
+
+// Ruby — `save!` and `empty?` must not match the keywords `save` / `empty`
+t.add_scanner(Box::new(
+    KeywordScanner::new("Keyword", &["def", "end", "do"])
+        .with_word_boundary_def(WordBoundaryDef::ruby()),
+));
+
+// CSS — `flex-wrap` must not match keyword `flex`
+t.add_scanner(Box::new(
+    KeywordScanner::new("Keyword", &["flex", "grid"])
+        .with_word_boundary_def(WordBoundaryDef::css()),
+));
 ```
 
-For Arabic, Hebrew, CJK, or Devanagari: the same `\p{Script=Arabic}` etc. work
-without any extra setup. The tokenizer treats all codepoints uniformly.
+**Operator-heavy languages** — use `add_operator_scanner` or `add_operator_scanner_with_subtypes`
+for symbolic multi-character operators. Unlike `KeywordScanner`, it does not
+enforce a word boundary, so `++`, `+=`, `->`, `=>`, `<<=`, etc. all work
+correctly when adjacent to identifiers or digits:
+
+```rust
+// All operators share one token_type
+t.add_operator_scanner("Op", &["**", "+=", "-=", "++", "--", "+", "-", "*"]);
+
+// Each operator gets its own token_sub_type
+t.add_operator_scanner_with_subtypes("Op", &[
+    ("<<=", "ShlAssign"),  // longest variants first is fine — scanner sorts internally
+    ("<<",  "Shl"),
+    ("<=",  "Le"),
+    ("<",   "Lt"),
+]);
+```
+
+**Unicode languages** — use `add_char_class_scanner` for identifier-like tokens;
+the lead and continuation specs accept standard ASCII ranges and Unicode character
+properties expressed as regex `\p{...}` patterns.
+
+```rust
+// Standard ASCII identifier: [a-zA-Z_][a-zA-Z0-9_]*
+t.add_char_class_scanner("a-zA-Z_", Some("a-zA-Z0-9_"), "Identifier", None);
+
+// Python-style Unicode identifier (ID_Start / ID_Continue)
+t.add_char_class_scanner("\\p{ID_Start}", Some("\\p{ID_Continue}"), "Identifier", None);
+```
+
+For languages with Arabic, CJK, Devanagari, or other Unicode script identifiers
+use `\p{Script=Arabic}` etc. in the spec strings. The `regex` crate handles all
+Unicode scalar values uniformly — no extra setup needed.
 
 **Block scanners** — use for multi-line content where a pair of delimiters
 encloses everything:
@@ -138,20 +196,37 @@ t.add_block_scanner("/*", "*/", "BlockComment", Some(BlockScannerConfig {
 }));
 ```
 
-**Custom scanners** — implement the `Scanner` trait for anything regex and
-blocks cannot handle (e.g. indent tokens, heredocs, encoding-dependent syntax):
+**Indentation-sensitive languages** — use the built-in `IndentationScanner`,
+which tracks indent depth and emits `INDENT` / `DEDENT` tokens automatically:
 
 ```rust
-pub struct IndentScanner { current_depth: usize }
+use rb_tokenizer::scanners::IndentationScanner;
 
-impl Scanner for IndentScanner {
+// Register as a contextual scanner; run the pipeline with tokenize_contextual()
+t.add_contextual_scanner(Box::new(IndentationScanner::new(
+    my_tok::INDENT,   // token type emitted when depth increases
+    my_tok::DEDENT,   // token type emitted when depth decreases
+)));
+
+// tokenize in contextual mode (threads a ScanContext through all scanners)
+let tokens = t.tokenize_contextual(source);
+```
+
+**Custom scanners** — implement the `Scanner` trait only for things that none
+of the built-in types cover (encoding-dependent syntax, domain-specific binary
+chunks, etc.):
+
+```rust
+pub struct MySpecialScanner;
+
+impl Scanner for MySpecialScanner {
     fn scan(&mut self, input: &str) -> Option<ScanMatch> {
-        // Count leading spaces, emit INDENT / DEDENT tokens
+        // return None to try the next scanner, or ScanMatch { .. } on success
         todo!()
     }
 }
 
-t.add_scanner(Box::new(IndentScanner { current_depth: 0 }));
+t.add_scanner(Box::new(MySpecialScanner));
 ```
 
 ---
