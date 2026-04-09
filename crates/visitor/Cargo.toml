@@ -1,0 +1,8 @@
+[package]
+name = "rb_visitor"
+version = "0.1.0"
+edition = "2021"
+description = "Re-exports the visitor API from rb_parser for downstream consumers."
+
+[dependencies]
+rb_parser = { path = "../rb_parser" }
