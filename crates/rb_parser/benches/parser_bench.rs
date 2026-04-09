@@ -1,17 +1,18 @@
 //! Criterion benchmarks for `rb_parser`.
 //!
 //! Groups:
-//!   1. `parse_json`       — JSON grammar: small / medium / large token streams.
-//!   2. `parse_expr_pratt` — Pratt expression: flat chains and deeply nested via parens.
+//!   1. `parse_json`           — JSON grammar: small / medium / large token streams.
+//!   2. `parse_expr_pratt`     — Pratt expression: flat chains and deeply nested via parens.
 //!   3. `parse_events_vs_tree` — `parse_events` vs `parse_tree` for the same input.
 //!   4. `parse_error_recovery` — Throughput when the token stream contains errors.
 //!   5. `parse_deeply_nested`  — Stress test: deeply recursive grammars.
 //!   6. `parse_throughput`     — Bytes-per-second scaling across input magnitudes.
+//!   7. `vs_serde_json`        — End-to-end: rb pipeline vs serde_json on identical inputs.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_parser::prelude::*;
-use rb_tokenizer::tokens::{SourceSpan, Token};
+use rb_tokenizer::{tokens::{SourceSpan, Token}, Tokenizer};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Token helpers
@@ -346,6 +347,99 @@ fn bench_parse_throughput(c: &mut Criterion) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 7. vs serde_json  — end-to-end JSON parsing comparison
+//
+// Compares the full rb pipeline (tokenize → parse_tree) with serde_json's
+// from_str::<serde_json::Value> on the same JSON byte strings.
+//
+// rb_parser is a *structure-preserving* lossless CST parser (retains all
+// trivia, node boundaries and field names), while serde_json is a value
+// deserialiser that discards structure; the comparison shows the cost gap
+// between the two design goals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Minimal JSON tokenizer for the pipeline side of the comparison.
+fn json_tokenizer_pipeline() -> Tokenizer {
+    let mut t = Tokenizer::new();
+    t.add_block_scanner("\"", "\"", "STRING", None, true, false, false);
+    t.add_regex_scanner(r"^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", "NUMBER", None).unwrap();
+    t.add_keyword_scanner("TRUE",  &["true"]);
+    t.add_keyword_scanner("FALSE", &["false"]);
+    t.add_keyword_scanner("NULL",  &["null"]);
+    t.add_symbol_scanner("{", "LBRACE",   None);
+    t.add_symbol_scanner("}", "RBRACE",   None);
+    t.add_symbol_scanner("[", "LBRACKET", None);
+    t.add_symbol_scanner("]", "RBRACKET", None);
+    t.add_symbol_scanner(":", "COLON",    None);
+    t.add_symbol_scanner(",", "COMMA",    None);
+    t
+}
+
+/// JSON string inputs of three sizes used by the vs_serde_json bench.
+///
+/// The sizes correspond roughly to the existing bench tiers:
+///   small  (~40 B)  — a single flat object
+///   medium (~700 B) — 50-key object with string and integer values
+///   large  (~9 KB)  — array of 200 objects with four fields each
+fn json_str_small() -> String {
+    r#"{"name":"Alice","age":30,"active":true,"score":99.5}"#.to_string()
+}
+
+fn json_str_medium() -> String {
+    let pairs: Vec<String> = (0..50)
+        .map(|i| format!(r#""key{i}":"value{i}","num{i}":{i}"#))
+        .collect();
+    format!("{{{}}}", pairs.join(","))
+}
+
+fn json_str_large() -> String {
+    let obj = |i: usize| format!(
+        r#"{{"id":{i},"name":"item{i}","value":{v},"active":true}}"#,
+        v = i * 17
+    );
+    let objs: Vec<String> = (0..200).map(obj).collect();
+    format!("[{}]", objs.join(","))
+}
+
+fn bench_vs_serde_json(c: &mut Criterion) {
+    let tokenizer = json_tokenizer_pipeline();
+    let parser    = build_json_parser();
+
+    let small  = json_str_small();
+    let medium = json_str_medium();
+    let large  = json_str_large();
+
+    let mut g = c.benchmark_group("vs_serde_json");
+
+    for (name, input) in [("small", &small), ("medium", &medium), ("large", &large)] {
+        g.throughput(Throughput::Bytes(input.len() as u64));
+
+        // ── rb pipeline ───────────────────────────────────────────────────────
+        // Includes tokenization so the comparison is honest end-to-end timing.
+        g.bench_with_input(
+            BenchmarkId::new("rb_pipeline", name),
+            input,
+            |b, inp| {
+                b.iter(|| {
+                    let tokens = tokenizer.tokenize(inp).unwrap();
+                    let mut ctx = DiagnosticsContext::new();
+                    parser.parse_tree(&tokens, &mut ctx)
+                })
+            },
+        );
+
+        // ── serde_json ────────────────────────────────────────────────────────
+        g.bench_with_input(
+            BenchmarkId::new("serde_json", name),
+            input,
+            |b, inp| b.iter(|| serde_json::from_str::<serde_json::Value>(inp).unwrap()),
+        );
+    }
+
+    g.finish();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -357,5 +451,6 @@ criterion_group!(
     bench_repeat1_stress,
     bench_deeply_nested,
     bench_parse_throughput,
+    bench_vs_serde_json,
 );
 criterion_main!(benches);

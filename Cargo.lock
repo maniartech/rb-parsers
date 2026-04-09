@@ -358,6 +358,7 @@ dependencies = [
  "indexmap",
  "rb_common",
  "rb_tokenizer",
+ "serde_json",
 ]
 
 [[package]]

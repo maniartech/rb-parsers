@@ -239,9 +239,17 @@ fn bench_whitespace_modes(c: &mut Criterion) {
                 t2.add_keyword_scanner("Keyword", &[*kw]);
             }
             t2.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Ident", None).unwrap();
+            // Full operator set matching source_code_tokenizer() so that
+            // operators like `>=`, `==` in source_code_input() are recognised.
             t2.add_operator_scanner_with_subtypes(
                 "Op",
-                &[("+", "Plus"), ("-", "Minus"), ("*", "Star"), ("/", "Slash"), ("=", "Assign")],
+                &[
+                    ("==", "Eq"), ("!=", "Ne"), ("<=", "Le"), (">=", "Ge"),
+                    ("<", "Lt"), (">", "Gt"),
+                    ("+=", "AddAssign"), ("-=", "SubAssign"),
+                    ("+", "Plus"), ("-", "Minus"), ("*", "Star"), ("/", "Slash"),
+                    ("=", "Assign"), ("&", "Amp"), ("|", "Pipe"),
+                ],
             );
             for (sym, ty, sub) in &[
                 ("{", "Punct", Some("LBrace")), ("}", "Punct", Some("RBrace")),
