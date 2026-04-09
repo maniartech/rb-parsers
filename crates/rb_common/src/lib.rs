@@ -1,5 +1,14 @@
 //! Shared infrastructure for the Rust Parsers workspace.
 //!
-//! This crate is intentionally minimal at first. Its design is expected to
-//! evolve through the documents in `docs/specs/` before stable public APIs are
-//! introduced for the rest of the workspace.
+//! Provides spans, diagnostics, error catalog, suggestions, rendering,
+//! hinting, recovery, and environment-detection primitives used by
+//! `rb_tokenizer` and `rb_parser`.
+
+pub mod catalog;
+pub mod diagnostics;
+pub mod env;
+pub mod hinting;
+pub mod recovery;
+pub mod render;
+pub mod spans;
+pub mod suggestions;
