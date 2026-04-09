@@ -5,7 +5,7 @@ the framework objectives defined in
 [`docs/requirements/framework-objectives.md`](../requirements/framework-objectives.md).
 
 **Date**: 2026-04-09
-**Status**: Initial findings — no issues resolved yet
+**Status**: All P0 correctness bugs resolved — 12 of 12 fixed
 
 ---
 
@@ -112,3 +112,86 @@ The `PlainRenderer` discards the error-line marker (A1) and the rendering system
 architecture is incomplete (A6, A7). Diagnostics are the user's most visible interaction
 with parse failures — these affect the framework's quality perception more than any
 benchmark number. See [P0](p0-correctness-bugs.md).
+
+---
+
+## Production Language & IDE Language Server Readiness
+
+This section answers: **"what do I need to fix before I can build X?"**
+
+### Capability Tiers
+
+| Target use case | Status today | Blocking issues |
+|---|---|---|
+| Config / DSL / TOML-like grammars | ✅ **Ready now** | None critical |
+| Full programming language (JSON-like complexity) | ✅ **Ready now** | — |
+| Full programming language (JS / Python / Ruby complexity) | ❌ **Not ready** | C10, C13, B4, B5 |
+| Compiler front-end (batch, no IDE) | ⚠️ Close — fix P1+P2 first | C10, C11, C13, C14, B4, B5, B7 |
+| IDE language server (LSP) | ❌ **Not ready** | All P1+P2 + C12, B11, D5, D6, C19, and LSP wire protocol (absent entirely) |
+
+---
+
+### Full Programming Language — Functional Blockers (P2)
+
+These block **any non-trivial grammar**. Fix before attempting a real language.
+
+| Issue | File | Why it blocks a real PL |
+|---|---|---|
+| **C10** — no `look()`/`not()` lookahead | [p2-missing-api.md](p2-missing-api.md) | Cannot distinguish keywords from identifiers; cannot express `!keyword ~ ident`; all contextual disambiguation requires escape to raw `ParseFn` |
+| **C13** — `PrattOp` ignores `token_sub_type` | [p2-missing-api.md](p2-missing-api.md) | All binary operators share the same binding power → `a + b == c + d` is misparsed; a correct arithmetic grammar is impossible |
+| **C11** — no `take_until()` | [p2-missing-api.md](p2-missing-api.md) | No template literals, heredocs, raw strings, or embedded expressions; workaround is O(tokens) recursive `many(not(end) ~ any)` |
+| **C14** — no `with_recovery()` builder | [p2-missing-api.md](p2-missing-api.md) | Recovery config silently ignored; no per-parse-session control; tests cannot disable recovery |
+
+**Estimated effort**: 2–4 weeks.
+
+---
+
+### Full Programming Language — Performance Blockers (P1)
+
+Current pipeline throughput: ~**2.3 MB/s**. A responsive language tool needs ≥ 20 MB/s;
+a language server needs ≥ 50 MB/s. The gap is ~10–22×. Root causes, in priority order:
+
+| Issue | File | Expected gain |
+|---|---|---|
+| **B4** — `String` per token (heap alloc per match) | [p1-performance.md](p1-performance.md) | 40–60% reduction alone |
+| **B5** — O(bytes/token) line/col tracking | [p1-performance.md](p1-performance.md) | 25–35% after B4 |
+| **B7** — O(scanners) dispatch per byte position | [p1-performance.md](p1-performance.md) | 15–30% in grammars with > 8 scanners |
+
+**Estimated effort**: 3–5 weeks. B4 is a breaking API change (adds lifetime to `Token`).
+
+---
+
+### IDE Language Server — Additional Blockers (P4)
+
+Even after P1+P2, an LSP requires infrastructure that does not yet exist:
+
+| Issue | File | Why the LSP cannot function without it |
+|---|---|---|
+| **C12** — no incremental re-parse | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Every keystroke re-parses the entire file; a 10k-line file = hundreds of ms per edit |
+| **B11** — no `tokenize_from(offset)` | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Same problem at tokenizer level; no checkpoint to restart from |
+| **D5** — no `serde` feature | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | CST cannot be serialized → no disk cache, no cross-process LSP transport |
+| **D6** — `Tokenizer` not `Clone` | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Cannot tokenize multiple files in parallel on a thread pool |
+| **C19** — no `AstLoweringStrategy` impl | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | LSP needs a typed AST for hover/completion/rename; manually lowering CST per project is not viable |
+| **C18** — no `CstToken::text()` | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Every LSP feature (hover, go-to-def, rename) duplicates manual span arithmetic |
+| *(absent)* — **LSP wire protocol** | — | Zero `textDocument/hover`, `textDocument/completion`, etc. Requires integrating a crate like `tower-lsp`; this layer is entirely absent |
+
+**Estimated effort**: 4–8 weeks for C12 alone (incremental re-parse is the hardest
+single item in this list — analogous to what tree-sitter spent years on). C18/D5/D6/C19
+together: ~2–3 weeks. LSP wire layer: ~6–12 weeks.
+
+---
+
+### Total Effort Estimate to LSP-Capable
+
+| Layer | Issues | Rough effort |
+|---|---|---|
+| Correct grammar expressiveness | C10, C11, C13, C14 | 2–4 weeks |
+| Performance (tolerable latency) | B4, B5, B7 | 3–5 weeks |
+| Incremental re-parse foundation | C12, B11 | 4–8 weeks |
+| CST-to-AST + serde + thread safety | C19, D5, D6, C18 | 2–3 weeks |
+| LSP wire protocol integration | `tower-lsp` wrapper, workspace indexer | 6–12 weeks |
+| **Total** | | **~17–32 weeks** |
+
+**Recommended sequencing**: Fix P1+P2 first → ship a formatter/linter/compiler front-end
+as a milestone → then tackle C12 (incremental re-parse) as its own dedicated milestone
+before building the LSP layer.

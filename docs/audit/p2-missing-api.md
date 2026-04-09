@@ -6,6 +6,12 @@ expressiveness and configurability without these primitives.
 
 **Back to**: [Audit Index](README.md)
 
+> **Production Language note**: C10 and C13 together are a hard gate on any non-trivial
+> programming language grammar. A correct expression grammar for JS/Python/Ruby is
+> impossible without both. C11 blocks template literals, raw strings, and heredocs.
+> C14 blocks per-parse recovery configuration.
+> See [README — Functional Blockers](README.md#full-programming-language--functional-blockers-p2).
+
 ---
 
 ## C10 · No `look(expr)` (lookahead) or `not(expr)` (negative lookahead)

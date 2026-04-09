@@ -8,6 +8,13 @@ friction when the crates are used outside this workspace or when contributors jo
 
 **Back to**: [Audit Index](README.md)
 
+> **IDE Language Server note**: C12, B11, D5, D6, and C19 are collectively a hard gate
+> on building a responsive IDE language server. C12 (incremental re-parse) is the
+> hardest single item — without it every keystroke re-parses the full file.
+> Additionally, the entire LSP wire protocol layer (`tower-lsp` integration) is absent
+> and must be added on top of these fixes.
+> See [README — LSP Additional Blockers](README.md#ide-language-server--additional-blockers-p4).
+
 ---
 
 ## B9 · No `Tokenizer` introspection — cannot list scanners, clone, or serialize

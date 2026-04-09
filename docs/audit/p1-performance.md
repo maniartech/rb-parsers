@@ -6,6 +6,11 @@ of the gap and should be fixed first.
 
 **Back to**: [Audit Index](README.md)
 
+> **LSP / Production Language note**: Current pipeline throughput is ~2.3 MB/s.
+> A responsive language tool needs ≥ 20 MB/s; an IDE language server needs ≥ 50 MB/s.
+> B4 + B5 + B7 are the critical path to closing that gap.
+> See [README — Performance Blockers](README.md#full-programming-language--performance-blockers-p1).
+
 **Benchmark baseline** (collected using `cargo bench --workspace`):
 
 | Input   | rb_pipeline | serde_json | Ratio |

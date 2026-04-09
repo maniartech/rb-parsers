@@ -3,11 +3,15 @@
 **Priority**: P0 — Fix before any other work. These issues produce wrong output
 or silently incorrect behaviour in the current implementation.
 
+**Status**: All 12 issues resolved. 306 tests passing.
+
 **Back to**: [Audit Index](README.md)
 
 ---
 
 ## A1 · PlainRenderer silently discards the error-line marker
+
+**Status**: ✅ Fixed — `render.rs`: prefix `char` included in format string; `'>'` now emitted on error lines.
 
 **Layer**: `rb_common`
 **File**: `crates/rb_common/src/render.rs`
@@ -52,6 +56,8 @@ out.push_str(&format!(
 ---
 
 ## A2 · `DefaultHasher` used for profile IDs — not stable across runs
+
+**Status**: ✅ Fixed — `profiles.rs`: replaced `DefaultHasher` with deterministic FNV-64 (`fnv64()` helper).
 
 **Layer**: `rb_common`
 **File**: `crates/rb_common/src/profiles.rs`
@@ -111,6 +117,8 @@ pub fn compute(language: &str, version: LanguageVersion, mode: ProfileMode, feat
 
 ## A3 · `SourceSpan::merge` of two UNKNOWN spans returns a valid-looking span
 
+**Status**: ✅ Fixed — `spans.rs`: UNKNOWN identity guards added to `merge()`; UNKNOWN merged with any span returns the non-UNKNOWN span.
+
 **Layer**: `rb_common`
 **File**: `crates/rb_common/src/spans.rs`
 **Symptom**: Merging two `SourceSpan::UNKNOWN` values (both zeros, both `SourceId(0)`)
@@ -146,6 +154,8 @@ pub fn merge(self, other: SourceSpan) -> Option<SourceSpan> {
 ---
 
 ## B1 · `Scanner::scan_with_context` derives `consumed_len` from `value.len()`
+
+**Status**: ✅ Fixed — `scanner.rs`: added `ScanMatch::verbatim(token)` and `ScanMatch::with_consumed(token, consumed_len)` constructors; trait doc updated to make override obligation explicit.
 
 **Layer**: `rb_tokenizer`
 **File**: `crates/rb_tokenizer/src/scanners/scanner.rs`
@@ -206,6 +216,8 @@ caller to be explicit.
 
 ## B2 · `ContextualScanner` silently invisible when `tokenize()` is called
 
+**Status**: ✅ Fixed — `tokenizer.rs`: added `has_contextual_scanners()` method; `#[cfg(debug_assertions)]` panic guard at start of `tokenize()` if contextual scanners are registered.
+
 **Layer**: `rb_tokenizer`
 **File**: `crates/rb_tokenizer/src/scanners/scanner_types.rs`
 **Symptom**: A `ContextualScanner` registered via `add_contextual_scanner` produces no
@@ -255,6 +267,8 @@ if self.scanners.iter().any(|s| matches!(s, ScannerType::Contextual(_))) {
 
 ## B3 · `TokenizationError` carries no source position when errors are returned
 
+**Status**: ✅ Fixed — `error.rs`: added `WithSpan { error: Box<TokenizationError>, span: SourceSpan }` variant plus `span()`, `inner()`, `at()` helpers; tokenizer loop wraps all errors with `.at(err_span)` at point of push.
+
 **Layer**: `rb_tokenizer`
 **File**: `crates/rb_tokenizer/src/tokenizers/tokenizer.rs`
 **Symptom**: Errors returned in `Err(Vec<TokenizationError>)` from `tokenize()` have
@@ -303,6 +317,8 @@ Err(mut e) => {
 ---
 
 ## C1 · `CstTree::walk_node` clones every node's child list during traversal
+
+**Status**: ✅ Fixed — `cst.rs`: now collects `Vec<NodeOrToken>` (Copy IDs) before visitor callbacks, removing `Vec<CstNodeChild>` clone per node.
 
 **Layer**: `rb_parser`
 **File**: `crates/rb_parser/src/cst.rs`
@@ -372,6 +388,8 @@ directly into `tree.children_store` with no allocation.
 
 ## C2 · `GrammarBuilder::rule` silently overwrites duplicate rule IDs
 
+**Status**: ✅ Fixed — `combinator.rs`: `GrammarBuilder::rule` now panics immediately if a rule ID is registered twice.
+
 **Layer**: `rb_parser`
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 **Symptom**: Calling `.rule(MyRule::Foo, a)` and then `.rule(MyRule::Foo, b)` silently
@@ -423,6 +441,8 @@ construction.
 ---
 
 ## C4 · `ParseContext::recovery` is never consulted by the parse engine
+
+**Status**: ✅ Fixed — `engine.rs`: removed the dead `recovery` field from `ParseContext` and its constructor parameter; all three `ParseContext::new()` call sites in `lib.rs` updated accordingly.
 
 **Layer**: `rb_parser`
 **File**: `crates/rb_parser/src/engine.rs`, `crates/rb_parser/src/grammar/combinator.rs`
@@ -480,6 +500,8 @@ fn eval<R, S>(
 
 ## C5 · Unclosed error nodes get zero-width spans that cannot be identified as synthetic
 
+**Status**: ✅ Fixed — `cst.rs`: added `is_error_recovery: bool` field to `CstNode` (default `false`); `strategy.rs`: nodes synthesized in `finish()` for unclosed stack entries have `is_error_recovery: true`.
+
 **Layer**: `rb_parser`
 **File**: `crates/rb_parser/src/strategy.rs`
 **Symptom**: When the parser stack has unclosed nodes after a parse error, synthesized
@@ -509,6 +531,8 @@ without a new field.
 ---
 
 ## C9 · `CstNode::direct_tokens()` includes trivia; `CstTree::tokens_of()` does not
+
+**Status**: ✅ Fixed — `cst.rs`: `direct_tokens()` doc updated with clear "includes trivia" warning; new `direct_semantic_tokens(tree)` method added that is consistent with `CstTree::tokens_of()`.
 
 **Layer**: `rb_parser`
 **File**: `crates/rb_parser/src/cst.rs`
@@ -549,6 +573,8 @@ Either:
 ---
 
 ## D1 · `visitor` crate referenced in workspace structure does not exist on disk
+
+**Status**: ✅ Fixed — created `crates/visitor/` with `Cargo.toml` and `src/lib.rs` (re-exports `TreeVisitor`, `DepthFirstWalker`, `WalkOrder` from `rb_parser::visitors`); added to workspace `[members]` in root `Cargo.toml`.
 
 **Layer**: workspace
 **File**: `docs/` and previous workspace structure references
