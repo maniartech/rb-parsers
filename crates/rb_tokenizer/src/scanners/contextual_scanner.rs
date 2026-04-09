@@ -78,8 +78,11 @@ pub trait ContextualScanner: Send + Sync {
 ///
 /// The closure receives the remaining input slice and a mutable reference to
 /// [`ScanContext`].  See [`ContextualScanner`] for usage examples.
+type ContextualScannerFn =
+    dyn Fn(&str, &mut ScanContext) -> Result<Option<Token>, TokenizationError> + Send + Sync;
+
 pub struct ContextualClosureScanner {
-    cb: Box<dyn Fn(&str, &mut ScanContext) -> Result<Option<Token>, TokenizationError> + Send + Sync>,
+    cb: Box<ContextualScannerFn>,
 }
 
 impl ContextualClosureScanner {

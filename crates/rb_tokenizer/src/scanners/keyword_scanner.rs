@@ -1,6 +1,6 @@
 use super::scanner::Scanner;
 use super::word_boundary::WordBoundaryDef;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 /// Matches keywords (reserved words) with an automatic **word-boundary check**.
 ///
@@ -125,8 +125,7 @@ impl Scanner for KeywordScanner {
                 token_type: self.token_type,
                 token_sub_type: *sub_type,
                 value: keyword.clone(),
-                line: 0,
-                column: 0,
+                span: SourceSpan::UNKNOWN,
             }));
         }
         Ok(None)

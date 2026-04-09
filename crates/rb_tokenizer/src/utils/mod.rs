@@ -13,8 +13,8 @@ pub fn pretty_print_tokens(tokens: &[Token]) -> String {
             token.token_type,
             token.token_sub_type.unwrap_or(""),
             token.value.replace('\n', "\\n"),
-            token.line,
-            token.column
+            token.display_line(),
+            token.display_column()
         )
         .unwrap();
     }
@@ -72,9 +72,9 @@ pub fn visualize_token_positions(input: &str, tokens: &[Token]) -> String {
 
     // Add markers for each token
     for (i, token) in tokens.iter().enumerate() {
-        if token.line > 0 && token.line <= lines.len() {
-            let line_idx = token.line - 1;
-            let col_idx = token.column - 1;
+        if token.display_line() > 0 && token.display_line() <= lines.len() {
+            let line_idx = token.display_line() - 1;
+            let col_idx = token.display_column() - 1;
 
             // Ensure we have enough space in the pointer line
             while pointer_lines[line_idx].len() < col_idx {
@@ -109,8 +109,8 @@ pub fn analyze_tokens(tokens: &[Token]) -> String {
         if let Some(subtype) = &token.token_sub_type {
             *subtype_counts.entry(*subtype).or_insert(0) += 1;
         }
-        max_line = max_line.max(token.line);
-        *tokens_per_line.entry(token.line).or_insert(0) += 1;
+        max_line = max_line.max(token.display_line());
+        *tokens_per_line.entry(token.display_line()).or_insert(0) += 1;
     }
 
     writeln!(&mut output, "Token Analysis:").unwrap();

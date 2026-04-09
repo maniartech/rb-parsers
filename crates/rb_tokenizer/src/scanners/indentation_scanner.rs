@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use super::contextual_scanner::ContextualScanner;
 use super::scan_context::ScanContext;
 use super::scanner::ScanMatch;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 // ── Internal state ────────────────────────────────────────────────────────────
 
@@ -142,8 +142,7 @@ impl ContextualScanner for IndentationScanner {
                 token_type: self.indent_token_type,
                 token_sub_type: None,
                 value: input[..indent_bytes].to_string(),
-                line: ctx.line,
-                column: ctx.column,
+                span: SourceSpan::UNKNOWN,
             };
             return Ok(Some(ScanMatch { consumed_len: indent_bytes, token }));
         }
@@ -164,8 +163,7 @@ impl ContextualScanner for IndentationScanner {
                 // Value encodes the number of levels popped so the parser can
                 // know how many scopes to close in one shot.
                 value: levels.to_string(),
-                line: ctx.line,
-                column: ctx.column,
+                span: SourceSpan::UNKNOWN,
             };
             // Consume the leading whitespace even though the value differs in length.
             return Ok(Some(ScanMatch { consumed_len: indent_bytes, token }));

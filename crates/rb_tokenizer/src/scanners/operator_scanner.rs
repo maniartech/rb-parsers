@@ -1,5 +1,5 @@
 use super::scanner::Scanner;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 /// Matches multi-character (and single-character) operators using a
 /// **longest-match-first** strategy with **no word-boundary check**.
@@ -86,8 +86,7 @@ impl Scanner for OperatorScanner {
                     token_type: self.token_type,
                     token_sub_type: *sub_type,
                     value: operator.clone(),
-                    line: 0,
-                    column: 0,
+                    span: SourceSpan::UNKNOWN,
                 }));
             }
         }

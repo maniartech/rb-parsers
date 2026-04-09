@@ -1,4 +1,4 @@
-use rb_tokenizer::tokens::Token;
+use rb_tokenizer::tokens::{Token, SourceId, SourcePosition, SourceSpan};
 
 #[cfg(test)]
 mod token_tests {
@@ -10,16 +10,19 @@ mod token_tests {
             token_type: "IDENTIFIER",
             token_sub_type: Some("VARIABLE"),
             value: "myVariable".to_string(),
-            line: 42,
-            column: 10,
+            span: SourceSpan {
+                source_id: SourceId::UNKNOWN,
+                start: SourcePosition { byte_offset: 0, line: 41, column: 9 },
+                end: SourcePosition::ZERO,
+            },
         };
 
         // Test basic properties
         assert_eq!(token.token_type, "IDENTIFIER");
         assert_eq!(token.token_sub_type, Some("VARIABLE"));
         assert_eq!(token.value, "myVariable");
-        assert_eq!(token.line, 42);
-        assert_eq!(token.column, 10);
+        assert_eq!(token.display_line(), 42);
+        assert_eq!(token.display_column(), 10);
     }
 
     #[test]
@@ -28,8 +31,7 @@ mod token_tests {
             token_type: "NUMBER",
             token_sub_type: None,
             value: "123.45".to_string(),
-            line: 5,
-            column: 20,
+            span: SourceSpan::UNKNOWN,
         };
 
         assert_eq!(token.token_type, "NUMBER");
@@ -43,24 +45,21 @@ mod token_tests {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
             value: "if".to_string(),
-            line: 10,
-            column: 5,
+            span: SourceSpan::UNKNOWN,
         };
 
         let token2 = Token {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
             value: "if".to_string(),
-            line: 10,
-            column: 5,
+            span: SourceSpan::UNKNOWN,
         };
 
         let different_token = Token {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
             value: "else".to_string(),
-            line: 10,
-            column: 15,
+            span: SourceSpan::UNKNOWN,
         };
 
         // Test equality
@@ -74,8 +73,11 @@ mod token_tests {
             token_type: "STRING",
             token_sub_type: Some("DOUBLE_QUOTED"),
             value: "Hello, world!".to_string(),
-            line: 7,
-            column: 12,
+            span: SourceSpan {
+                source_id: SourceId::UNKNOWN,
+                start: SourcePosition { byte_offset: 0, line: 6, column: 11 },
+                end: SourcePosition::ZERO,
+            },
         };
 
         let cloned = original.clone();
@@ -85,8 +87,8 @@ mod token_tests {
         assert_eq!(cloned.token_type, "STRING");
         assert_eq!(cloned.token_sub_type, Some("DOUBLE_QUOTED"));
         assert_eq!(cloned.value, "Hello, world!");
-        assert_eq!(cloned.line, 7);
-        assert_eq!(cloned.column, 12);
+        assert_eq!(cloned.display_line(), 7);
+        assert_eq!(cloned.display_column(), 12);
     }
 
     #[test]
@@ -95,8 +97,11 @@ mod token_tests {
             token_type: "OPERATOR",
             token_sub_type: Some("ARITHMETIC"),
             value: "+".to_string(),
-            line: 15,
-            column: 8,
+            span: SourceSpan {
+                source_id: SourceId::UNKNOWN,
+                start: SourcePosition { byte_offset: 0, line: 14, column: 7 },
+                end: SourcePosition::ZERO,
+            },
         };
 
         // Test Debug implementation
@@ -106,8 +111,8 @@ mod token_tests {
         assert!(debug_output.contains("OPERATOR"));
         assert!(debug_output.contains("ARITHMETIC"));
         assert!(debug_output.contains("+"));
-        assert!(debug_output.contains("15"));
-        assert!(debug_output.contains("8"));
+        assert_eq!(token.display_line(), 15);
+        assert_eq!(token.display_column(), 8);
     }
 
     #[test]
@@ -116,8 +121,7 @@ mod token_tests {
             token_type: "COMMENT",
             token_sub_type: Some("BLOCK"),
             value: "/* This is\na multiline\ncomment */".to_string(),
-            line: 20,
-            column: 0,
+            span: SourceSpan::UNKNOWN,
         };
 
         assert_eq!(token.token_type, "COMMENT");

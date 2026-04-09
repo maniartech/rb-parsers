@@ -38,15 +38,13 @@ mod tests {
                 token_type: "Number",
                 token_sub_type: None,
                 value: "123".to_string(),
-                line: 1,
-                column: 1,
+                span: tokens::SourceSpan::UNKNOWN,
             },
             tokens::Token {
                 token_type: "Operator",
                 token_sub_type: Some("Plus"),
                 value: "+".to_string(),
-                line: 1,
-                column: 5,
+                span: tokens::SourceSpan::UNKNOWN,
             },
         ];
 

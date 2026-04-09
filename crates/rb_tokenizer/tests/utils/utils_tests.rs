@@ -1,4 +1,4 @@
-use rb_tokenizer::{tokens::Token, utils};
+use rb_tokenizer::{tokens::{Token, SourceSpan}, utils};
 
 #[cfg(test)]
 mod utils_tests {
@@ -10,36 +10,31 @@ mod utils_tests {
                 token_type: "IDENTIFIER",
                 token_sub_type: Some("VARIABLE"),
                 value: "myVar".to_string(),
-                line: 1,
-                column: 5,
+                span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "OPERATOR",
                 token_sub_type: Some("ASSIGNMENT"),
                 value: "=".to_string(),
-                line: 1,
-                column: 11,
+                span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "NUMBER",
                 token_sub_type: None,
                 value: "42".to_string(),
-                line: 1,
-                column: 13,
+                span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "PUNCTUATION",
                 token_sub_type: Some("SEMICOLON"),
                 value: ";".to_string(),
-                line: 1,
-                column: 15,
+                span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "WHITESPACE",
                 token_sub_type: Some("NEWLINE"),
                 value: "\n".to_string(),
-                line: 1,
-                column: 16,
+                span: SourceSpan::UNKNOWN,
             },
         ]
     }
@@ -69,8 +64,7 @@ mod utils_tests {
             token_type: "STRING",
             token_sub_type: Some("DOUBLE_QUOTED"),
             value: "Hello\nWorld".to_string(),
-            line: 2,
-            column: 3,
+            span: SourceSpan::UNKNOWN,
         };
 
         let summary = utils::token_summary(&token);

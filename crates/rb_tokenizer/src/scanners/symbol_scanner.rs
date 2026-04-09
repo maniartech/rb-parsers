@@ -1,6 +1,5 @@
 use super::scanner::Scanner;
-use crate::tokens::Token;
-use crate::tokens::TokenizationError;
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 pub struct SymbolScanner {
     pub symbol: String,
@@ -22,8 +21,7 @@ impl Scanner for SymbolScanner {
     fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
         if input.starts_with(&self.symbol) {
             Ok(Some(Token {
-                line: 0,
-                column: 0,
+                span: SourceSpan::UNKNOWN,
                 value: self.symbol.clone(),
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,

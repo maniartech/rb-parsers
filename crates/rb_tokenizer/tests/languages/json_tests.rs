@@ -76,8 +76,8 @@ mod json_tests {
         ];
 
         assert_eq!(actual, expected);
-        assert_eq!((result[0].line, result[0].column), (1, 1));
-        assert_eq!((result[1].line, result[1].column), (2, 13));
+        assert_eq!((result[0].display_line(), result[0].display_column()), (1, 1));
+        assert_eq!((result[1].display_line(), result[1].display_column()), (2, 13));
     }
 
     #[test]

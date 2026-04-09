@@ -40,8 +40,7 @@ fn get_ejs_tokenizer() -> Tokenizer {
                 token_type: "HTML",
                 token_sub_type: None,
                 value: html_content.to_string(),
-                line: 0,
-                column: 0,
+                span: rb_tokenizer::tokens::SourceSpan::UNKNOWN,
             }))
         }
     }));

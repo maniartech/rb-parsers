@@ -1,5 +1,5 @@
 use super::scanner::Scanner;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 /// A declarative, configurable scanner for numeric literals.
 ///
@@ -173,8 +173,7 @@ impl Scanner for NumberLiteralScanner {
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
                 value: input[..pos].to_string(),
-                line: 0,
-                column: 0,
+                span: SourceSpan::UNKNOWN,
             }));
         }
 
@@ -198,8 +197,7 @@ impl Scanner for NumberLiteralScanner {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
                             value: input[..end].to_string(),
-                            line: 0,
-                            column: 0,
+                            span: SourceSpan::UNKNOWN,
                         }));
                     }
                 }
@@ -215,8 +213,7 @@ impl Scanner for NumberLiteralScanner {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
                             value: input[..end].to_string(),
-                            line: 0,
-                            column: 0,
+                            span: SourceSpan::UNKNOWN,
                         }));
                     }
                 }
@@ -232,8 +229,7 @@ impl Scanner for NumberLiteralScanner {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
                             value: input[..end].to_string(),
-                            line: 0,
-                            column: 0,
+                            span: SourceSpan::UNKNOWN,
                         }));
                     }
                 }
@@ -285,8 +281,7 @@ impl Scanner for NumberLiteralScanner {
             token_type: self.token_type,
             token_sub_type: self.token_sub_type,
             value: input[..pos].to_string(),
-            line: 0,
-            column: 0,
+            span: SourceSpan::UNKNOWN,
         }))
     }
 }

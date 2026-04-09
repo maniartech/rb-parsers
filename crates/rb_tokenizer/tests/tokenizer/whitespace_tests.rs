@@ -58,16 +58,16 @@ mod whitespace_tests {
         assert_eq!(result.len(), 3, "Unexpected number of tokens");
 
         // Check line and column of first token
-        assert_eq!(result[0].line, 1);
-        assert_eq!(result[0].column, 1);
+        assert_eq!(result[0].display_line(), 1);
+        assert_eq!(result[0].display_column(), 1);
 
         // Check line and column of newline token
-        assert_eq!(result[1].line, 1);
-        assert_eq!(result[1].column, 6);
+        assert_eq!(result[1].display_line(), 1);
+        assert_eq!(result[1].display_column(), 6);
 
         // Check line and column of second identifier (should be on line 2)
-        assert_eq!(result[2].line, 2);
-        assert_eq!(result[2].column, 1);
+        assert_eq!(result[2].display_line(), 2);
+        assert_eq!(result[2].display_column(), 1);
 
         println!("Line and column tracking: {:?}", result);
     }

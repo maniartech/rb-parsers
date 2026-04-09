@@ -1,6 +1,6 @@
 use super::scanner::Scanner;
 use super::scanner::ScanMatch;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 /// `EolScanner` implementation for parsing structures that start with a specific delimiter
 /// and continue until the end of line. This scanner handles structures like line comments,
@@ -78,8 +78,7 @@ impl Scanner for EolScanner {
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
                 value: token_value,
-                line: 0,   // To be filled in by the tokenizer
-                column: 0, // To be filled in by the tokenizer
+                span: SourceSpan::UNKNOWN,
             };
 
             Ok(Some(token))
@@ -108,8 +107,7 @@ impl Scanner for EolScanner {
                     token_type: self.token_type,
                     token_sub_type: self.token_sub_type,
                     value: token_value,
-                    line: 0,
-                    column: 0,
+                    span: SourceSpan::UNKNOWN,
                 },
             }));
         }

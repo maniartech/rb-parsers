@@ -163,8 +163,8 @@ mod block_scanner_tests {
         assert_eq!(result[0].value, "/* This is a block comment */");
 
         // Check positions
-        assert_eq!(result[0].line, 1);
-        assert_eq!(result[0].column, 1);
+        assert_eq!(result[0].display_line(), 1);
+        assert_eq!(result[0].display_column(), 1);
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod block_scanner_tests {
         assert_eq!(result[0].value, "line\nvalue");
         assert_eq!(result[1].token_type, "Identifier");
         assert_eq!(result[1].value, "next");
-        assert_eq!(result[1].column, 15);
+        assert_eq!(result[1].display_column(), 15);
     }
 
     #[test]

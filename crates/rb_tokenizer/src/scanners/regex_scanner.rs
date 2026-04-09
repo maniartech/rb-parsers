@@ -1,7 +1,6 @@
 use super::Scanner;
 use super::scanner::ScanMatch;
-use crate::tokens::Token;
-use crate::tokens::TokenizationError;
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 use super::scanner::AcceptStrategy;
 use regex::Regex;
 
@@ -70,8 +69,7 @@ impl Scanner for RegexScanner {
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
                 value: mat.as_str().to_string(),
-                line: 0,
-                column: 0,
+                span: SourceSpan::UNKNOWN,
             }))
         }
         Ok(None)
@@ -95,8 +93,7 @@ impl Scanner for RegexScanner {
                     token_type: self.token_type,
                     token_sub_type: self.token_sub_type,
                     value: mat.as_str().to_string(),
-                    line: 0,
-                    column: 0,
+                    span: SourceSpan::UNKNOWN,
                 },
             }));
         }

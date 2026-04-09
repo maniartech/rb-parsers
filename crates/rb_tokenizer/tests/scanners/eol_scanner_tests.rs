@@ -69,9 +69,9 @@ mod eol_scanner_tests {
         assert_eq!(result[0].value, "// This is a line comment\n");
 
         // Check positions
-        assert_eq!(result[0].line, 1);
-        assert_eq!(result[0].column, 1);
-        assert_eq!(result[1].line, 2);
+        assert_eq!(result[0].display_line(), 1);
+        assert_eq!(result[0].display_column(), 1);
+        assert_eq!(result[1].display_line(), 2);
     }
 
     #[test]
@@ -90,7 +90,7 @@ mod eol_scanner_tests {
         assert_eq!(result[2].value, "// This is a comment at the end");
 
         // The comment should be on line 2
-        assert_eq!(result[2].line, 2);
+        assert_eq!(result[2].display_line(), 2);
     }
 
     #[test]
@@ -164,7 +164,7 @@ mod eol_scanner_tests {
 
         // Regular tokens should also be correctly identified
         let identifier = result.iter().find(|t| t.token_type == "Identifier" && t.value == "var").unwrap();
-        assert_eq!(identifier.line, 1);
+        assert_eq!(identifier.display_line(), 1);
     }
 
     #[test]
@@ -176,13 +176,13 @@ mod eol_scanner_tests {
         let result = tokenizer.tokenize(input).expect("Tokenization failed");
 
         // Check line numbers for each token
-        assert_eq!(result[0].line, 1);
+        assert_eq!(result[0].display_line(), 1);
         assert_eq!(result[0].token_type, "Comment");
 
-        assert_eq!(result[1].line, 2);
+        assert_eq!(result[1].display_line(), 2);
         assert_eq!(result[1].token_type, "Preprocessor");
 
-        assert_eq!(result[2].line, 3);
+        assert_eq!(result[2].display_line(), 3);
         assert_eq!(result[2].token_type, "Directive");
     }
 
@@ -219,9 +219,9 @@ mod eol_scanner_tests {
         assert_eq!(result[2].token_type, "Directive");
 
         // Check line positions
-        assert_eq!(result[0].line, 1);
-        assert_eq!(result[1].line, 2);
-        assert_eq!(result[2].line, 3);
+        assert_eq!(result[0].display_line(), 1);
+        assert_eq!(result[1].display_line(), 2);
+        assert_eq!(result[2].display_line(), 3);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use super::scanner::Scanner;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 // ── Internal char-class representation ───────────────────────────────────────
 
@@ -159,8 +159,7 @@ impl Scanner for CharClassScanner {
             token_type: self.token_type,
             token_sub_type: self.token_sub_type,
             value,
-            line: 0,
-            column: 0,
+            span: SourceSpan::UNKNOWN,
         }))
     }
 }

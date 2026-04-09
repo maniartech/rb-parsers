@@ -7,6 +7,7 @@ use crate::scanners::scan_context::ScanContext;
 use crate::scanners::whitespace_scanner::WhitespaceScanner;
 use crate::scanners::{self, BlockScanner, EolScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
+use rb_common::spans::{SourceId, SourcePosition, SourceSpan};
 use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,8 @@ pub struct Tokenizer {
     scanners: Vec<ScannerType>,
     config: TokenizerConfig,
     last_errors: RefCell<Option<Vec<TokenizationError>>>,
+    /// Source identity used on all tokens produced by this instance.
+    pub source_id: SourceId,
 }
 
 impl Default for Tokenizer {
@@ -69,6 +72,7 @@ impl Tokenizer {
             scanners: Vec::new(),
             config: TokenizerConfig::default(),
             last_errors: RefCell::new(None),
+            source_id: SourceId::UNKNOWN,
         }
     }
 
@@ -77,7 +81,14 @@ impl Tokenizer {
             scanners: Vec::new(),
             config,
             last_errors: RefCell::new(None),
+            source_id: SourceId::UNKNOWN,
         }
+    }
+
+    /// Sets the source identity used on all tokens produced by this instance.
+    pub fn with_source_id(mut self, id: SourceId) -> Self {
+        self.source_id = id;
+        self
     }
 
     pub fn config(&self) -> &TokenizerConfig {
@@ -364,23 +375,38 @@ impl Tokenizer {
                 match scanner.scan_with_context(current_input) {
                     Ok(Some(scan_match)) => {
                         let token_len = scan_match.consumed_len;
-                        let token = scan_match.token;
+                        let partial = scan_match.token;
 
-                        // Track position if configured
-                        let token_with_position = if self.config.track_token_positions {
-                            Token {
-                                line: current_line,
-                                column: current_column,
-                                ..token
-                            }
-                        } else {
-                            token
+                        let start_byte = start;
+                        let start_pos = SourcePosition {
+                            byte_offset: start_byte,
+                            line: current_line - 1,
+                            column: current_column - 1,
                         };
 
-                        tokens.push(token_with_position);
-
-                        // Advance the iterator and update positions
                         Self::advance_cursor(&mut chars, token_len, &mut current_line, &mut current_column);
+
+                        let span = if self.config.track_token_positions {
+                            SourceSpan {
+                                source_id: self.source_id,
+                                start: start_pos,
+                                end: SourcePosition {
+                                    byte_offset: start_byte + token_len,
+                                    line: current_line - 1,
+                                    column: current_column - 1,
+                                },
+                            }
+                        } else {
+                            SourceSpan::UNKNOWN
+                        };
+
+                        tokens.push(Token {
+                            token_type: partial.token_type,
+                            token_sub_type: partial.token_sub_type,
+                            value: partial.value,
+                            span,
+                        });
+
                         matched = true;
                         break;
                     }
@@ -411,8 +437,9 @@ impl Tokenizer {
             if !matched {
                 if next_char.is_whitespace() {
                     if self.config.tokenize_whitespace {
-                        let start_line = current_line;
-                        let start_column = current_column;
+                        let ws_start_byte = start;
+                        let ws_start_line = current_line;
+                        let ws_start_col = current_column;
                         let mut whitespace = String::new();
                         let mut has_newline = false;
 
@@ -422,12 +449,10 @@ impl Tokenizer {
                                 break;
                             }
 
-                            // Clone the character to avoid borrowing issues
                             let current_char = *ch;
                             whitespace.push(current_char);
                             has_newline |= current_char == '\n';
 
-                            // Advance the iterator
                             chars.next();
 
                             if current_char == '\n' {
@@ -438,13 +463,29 @@ impl Tokenizer {
                             }
                         }
 
-                        // Create the whitespace token
+                        let ws_span = if self.config.track_token_positions {
+                            SourceSpan {
+                                source_id: self.source_id,
+                                start: SourcePosition {
+                                    byte_offset: ws_start_byte,
+                                    line: ws_start_line - 1,
+                                    column: ws_start_col - 1,
+                                },
+                                end: SourcePosition {
+                                    byte_offset: ws_start_byte + whitespace.len(),
+                                    line: current_line - 1,
+                                    column: current_column - 1,
+                                },
+                            }
+                        } else {
+                            SourceSpan::UNKNOWN
+                        };
+
                         tokens.push(Token {
                             token_type: "Whitespace",
                             token_sub_type: if has_newline { Some("Newline") } else { None },
                             value: whitespace,
-                            line: start_line,
-                            column: start_column,
+                            span: ws_span,
                         });
                     } else {
                         // Skip whitespace when not tokenizing it
@@ -528,22 +569,41 @@ impl Tokenizer {
                 match scanner.scan_contextually(current_input, &mut ctx) {
                     Ok(Some(scan_match)) => {
                         let token_len = scan_match.consumed_len;
-                        let token = scan_match.token;
+                        let partial = scan_match.token;
 
-                        let token_with_position = if self.config.track_token_positions {
-                            Token {
-                                line: current_line,
-                                column: current_column,
-                                ..token
-                            }
-                        } else {
-                            token
+                        let start_byte = start;
+                        let start_pos = SourcePosition {
+                            byte_offset: start_byte,
+                            line: current_line - 1,
+                            column: current_column - 1,
                         };
 
-                        ctx.prev_token_kind = Some(token_with_position.token_type);
-                        tokens.push(token_with_position);
-
                         Self::advance_cursor(&mut chars, token_len, &mut current_line, &mut current_column);
+
+                        let span = if self.config.track_token_positions {
+                            SourceSpan {
+                                source_id: self.source_id,
+                                start: start_pos,
+                                end: SourcePosition {
+                                    byte_offset: start_byte + token_len,
+                                    line: current_line - 1,
+                                    column: current_column - 1,
+                                },
+                            }
+                        } else {
+                            SourceSpan::UNKNOWN
+                        };
+
+                        let token = Token {
+                            token_type: partial.token_type,
+                            token_sub_type: partial.token_sub_type,
+                            value: partial.value,
+                            span,
+                        };
+
+                        ctx.prev_token_kind = Some(token.token_type);
+                        tokens.push(token);
+
                         matched = true;
                         break;
                     }
@@ -589,12 +649,29 @@ impl Tokenizer {
                             }
                         }
 
+                        let ws_span = if self.config.track_token_positions {
+                            SourceSpan {
+                                source_id: self.source_id,
+                                start: SourcePosition {
+                                    byte_offset: start,
+                                    line: start_line - 1,
+                                    column: start_column - 1,
+                                },
+                                end: SourcePosition {
+                                    byte_offset: start + whitespace.len(),
+                                    line: current_line - 1,
+                                    column: current_column - 1,
+                                },
+                            }
+                        } else {
+                            SourceSpan::UNKNOWN
+                        };
+
                         let ws_token = Token {
                             token_type: "Whitespace",
                             token_sub_type: if has_newline { Some("Newline") } else { None },
                             value: whitespace,
-                            line: start_line,
-                            column: start_column,
+                            span: ws_span,
                         };
                         ctx.prev_token_kind = Some(ws_token.token_type);
                         tokens.push(ws_token);

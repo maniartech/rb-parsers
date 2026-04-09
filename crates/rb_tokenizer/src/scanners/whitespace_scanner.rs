@@ -1,5 +1,5 @@
 use super::scanner::Scanner;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 
 /// Tokenizes whitespace with configurable treatment of newlines and line
 /// continuations.
@@ -145,8 +145,7 @@ impl Scanner for WhitespaceScanner {
                         token_type: cont_type,
                         token_sub_type: None,
                         value: input[..total].to_string(),
-                        line: 0,
-                        column: 0,
+                        span: SourceSpan::UNKNOWN,
                     }));
                 }
                 // Backslash not followed by newline — not a line continuation;
@@ -167,8 +166,7 @@ impl Scanner for WhitespaceScanner {
                     token_type: nl_type,
                     token_sub_type: None,
                     value: input[..len].to_string(),
-                    line: 0,
-                    column: 0,
+                    span: SourceSpan::UNKNOWN,
                 }));
             }
         }
@@ -201,8 +199,7 @@ impl Scanner for WhitespaceScanner {
             token_type: self.token_type,
             token_sub_type: None,
             value: input[..len].to_string(),
-            line: 0,
-            column: 0,
+            span: SourceSpan::UNKNOWN,
         }))
     }
 }

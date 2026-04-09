@@ -16,8 +16,7 @@ mod closure_scanner_tests {
                     token_type: "TEST",
                     token_sub_type: None,
                     value: "test".to_string(),
-                    line: 0,
-                    column: 0,
+                    span: rb_tokenizer::tokens::SourceSpan::UNKNOWN,
                 };
                 Ok(Some(token))
             } else {

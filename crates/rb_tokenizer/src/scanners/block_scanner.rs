@@ -1,6 +1,6 @@
 use super::scanner::Scanner;
 use super::scanner::ScanMatch;
-use crate::tokens::{Token, TokenizationError};
+use crate::tokens::{Token, TokenizationError, SourceSpan};
 use regex::Regex;
 use std::collections::HashMap;
 
@@ -410,8 +410,7 @@ impl Scanner for BlockScanner {
                     token_type: self.token_type,
                     token_sub_type: self.token_sub_type,
                     value: token_value,
-                    line: 0,   // To be filled in by the tokenizer
-                    column: 0, // To be filled in by the tokenizer
+                    span: SourceSpan::UNKNOWN,
                 };
 
                 // Return the full match end position to ensure
@@ -450,8 +449,7 @@ impl Scanner for BlockScanner {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
                             value: token_value,
-                            line: 0,
-                            column: 0,
+                            span: SourceSpan::UNKNOWN,
                         },
                     }))
                 }
