@@ -86,6 +86,13 @@ impl std::fmt::Display for FeatureFlag {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ResolvedProfileId(pub u64);
 
+/// A1 — Deterministic FNV-64 hash, stable across runs, platforms, and Rust versions.
+fn fnv64(bytes: &[u8]) -> u64 {
+    const OFFSET: u64 = 14695981039346656037;
+    const PRIME: u64 = 1099511628211;
+    bytes.iter().fold(OFFSET, |hash, &b| hash.wrapping_mul(PRIME) ^ (b as u64))
+}
+
 impl ResolvedProfileId {
     pub fn compute(
         language: &str,
@@ -93,17 +100,17 @@ impl ResolvedProfileId {
         mode: ProfileMode,
         features: &[FeatureFlag], // must be sorted by caller
     ) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut h = DefaultHasher::new();
-        language.hash(&mut h);
-        version.hash(&mut h);
-        // Hash mode as its display string to avoid enum discriminant brittleness
-        mode.to_string().hash(&mut h);
+        let mut buf = String::new();
+        buf.push_str(language);
+        buf.push('\x00');
+        buf.push_str(&version.to_string());
+        buf.push('\x00');
+        buf.push_str(&mode.to_string());
         for f in features {
-            f.0.hash(&mut h);
+            buf.push('\x00');
+            buf.push_str(f.0);
         }
-        ResolvedProfileId(h.finish())
+        ResolvedProfileId(fnv64(buf.as_bytes()))
     }
 }
 

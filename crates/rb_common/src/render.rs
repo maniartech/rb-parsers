@@ -286,15 +286,15 @@ impl DiagnosticRenderer for PlainRenderer {
                     for line in &snippet.lines {
                         let num_str = format!("{}", line.line_number);
                         let pad = max_num_w - num_str.len();
-                        let prefix = if line.is_context { " " } else { ">" };
+                        let prefix = if line.is_context { ' ' } else { '>' };
                         out.push_str(&format!(
-                            " {:pad$}{} | {}\n",
+                            "{} {:pad$}{} | {}\n",
+                            prefix,
                             "",
                             num_str,
                             line.content,
                             pad = pad
                         ));
-                        let _ = prefix;
                     }
                 }
             }

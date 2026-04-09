@@ -96,7 +96,10 @@ impl SourceSpan {
 
     /// Merges two spans sharing the same source, taking the outermost bounds.
     /// Returns `None` when sources differ.
+    /// An UNKNOWN span is treated as identity: `merge(UNKNOWN, s) == s` and vice-versa.
     pub fn merge(self, other: SourceSpan) -> Option<SourceSpan> {
+        if self == SourceSpan::UNKNOWN { return Some(other); }
+        if other == SourceSpan::UNKNOWN { return Some(self); }
         if self.source_id != other.source_id {
             return None;
         }
