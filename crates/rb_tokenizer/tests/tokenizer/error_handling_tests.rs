@@ -38,8 +38,8 @@ mod error_handling_tests {
 
             // Check if we have any error (either UnrecognizedToken or UnmatchedBlockDelimiter)
             let has_error = errors.iter().any(|e| {
-                matches!(e, TokenizationError::UnrecognizedToken(_)) ||
-                matches!(e, TokenizationError::UnmatchedBlockDelimiter(_, _))
+                matches!(e.inner(), TokenizationError::UnrecognizedToken(_)) ||
+                matches!(e.inner(), TokenizationError::UnmatchedBlockDelimiter(_, _))
             });
 
             assert!(has_error, "Should have an error when processing invalid input");
@@ -67,8 +67,8 @@ mod error_handling_tests {
             // The implementation might produce UnrecognizedToken errors instead of UnmatchedBlockDelimiter
             // So we'll check for either type
             let error_count = err_vec.iter().filter(|e| {
-                matches!(e, TokenizationError::UnrecognizedToken(_)) ||
-                matches!(e, TokenizationError::UnmatchedBlockDelimiter(_, _))
+                matches!(e.inner(), TokenizationError::UnrecognizedToken(_)) ||
+                matches!(e.inner(), TokenizationError::UnmatchedBlockDelimiter(_, _))
             }).count();
 
             assert!(error_count > 0, "Should have at least one error");

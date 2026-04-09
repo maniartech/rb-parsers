@@ -357,8 +357,27 @@ impl Tokenizer {
         self.scanners.push(ScannerType::Whitespace(scanner));
     }
 
+    /// Returns `true` if any contextual scanner has been registered via
+    /// [`add_contextual_scanner`](Self::add_contextual_scanner) or
+    /// [`add_contextual_closure`](Self::add_contextual_closure).
+    ///
+    /// Use this to select between [`tokenize`](Self::tokenize) and
+    /// [`tokenize_contextual`](Self::tokenize_contextual) at runtime.
+    pub fn has_contextual_scanners(&self) -> bool {
+        self.scanners.iter().any(|s| matches!(s, ScannerType::Contextual(_)))
+    }
+
     // Enhanced tokenize method with improved whitespace handling
     pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
+        // Guard: contextual scanners are invisible to this path. Catch the mistake early.
+        #[cfg(debug_assertions)]
+        if self.has_contextual_scanners() {
+            panic!(
+                "Tokenizer::tokenize() called but contextual scanners are registered. \
+                 Use tokenize_contextual() instead, or check has_contextual_scanners() before calling."
+            );
+        }
+
         let mut tokens = Vec::new();
         let mut errors = Vec::new();
 
@@ -412,8 +431,12 @@ impl Tokenizer {
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        // Preserve the original error and add position information
-                        errors.push(e);
+                        let err_span = SourceSpan {
+                            source_id: self.source_id,
+                            start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                            end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        };
+                        errors.push(e.at(err_span));
 
                         if errors.len() >= self.config.error_tolerance_limit {
                             *self.last_errors.borrow_mut() = Some(errors.clone());
@@ -506,10 +529,15 @@ impl Tokenizer {
                         }
                     }
                 } else {
+                    let err_span = SourceSpan {
+                        source_id: self.source_id,
+                        start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                    };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
                             current_line, current_column, next_char)
-                    );
+                    ).at(err_span);
                     errors.push(error);
 
                     if self.config.continue_on_error {
@@ -609,7 +637,12 @@ impl Tokenizer {
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        errors.push(e);
+                        let err_span = SourceSpan {
+                            source_id: self.source_id,
+                            start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                            end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        };
+                        errors.push(e.at(err_span));
                         if errors.len() >= self.config.error_tolerance_limit {
                             *self.last_errors.borrow_mut() = Some(errors.clone());
                             return Err(errors);
@@ -689,10 +722,15 @@ impl Tokenizer {
                         }
                     }
                 } else {
+                    let err_span = SourceSpan {
+                        source_id: self.source_id,
+                        start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                    };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
                             current_line, current_column, next_char)
-                    );
+                    ).at(err_span);
                     errors.push(error);
                     if self.config.continue_on_error {
                         chars.next();
