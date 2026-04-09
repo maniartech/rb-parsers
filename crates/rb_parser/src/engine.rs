@@ -103,8 +103,6 @@ pub enum RecoveryAction {
 pub struct ParseContext<'src> {
     tokens: &'src [Token],
     pub ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
-    #[allow(dead_code)] // stored for future use when ParseContext drives recovery directly
-    pub(crate) recovery: crate::profiles::RecoveryConfig,
     pub profile: &'src crate::profiles::ResolvedProfile,
     pub(crate) source_id: rb_common::spans::SourceId,
     cursor: usize,
@@ -117,13 +115,11 @@ impl<'src> ParseContext<'src> {
         tokens: &'src [Token],
         ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
         profile: &'src crate::profiles::ResolvedProfile,
-        recovery: crate::profiles::RecoveryConfig,
         source_id: rb_common::spans::SourceId,
     ) -> Self {
         ParseContext {
             tokens,
             ctx,
-            recovery,
             profile,
             source_id,
             cursor: 0,

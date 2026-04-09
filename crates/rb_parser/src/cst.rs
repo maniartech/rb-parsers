@@ -71,6 +71,11 @@ pub struct CstNode {
     pub kind: SyntaxKind,
     pub span: SourceSpan,
     pub children: Vec<CstNodeChild>,
+    /// `true` when this node was synthesised by the error-recovery strategy to
+    /// represent an unclosed or missing construct. Such nodes may have a
+    /// zero-width span that is otherwise indistinguishable from a genuinely
+    /// zero-width production.
+    pub is_error_recovery: bool,
 }
 
 impl CstNode {
@@ -82,8 +87,28 @@ impl CstNode {
             .map(|c| c.child)
     }
 
+    /// Returns the IDs of **all** token children of this node — both semantic
+    /// tokens and trivia (whitespace, comments, etc.).
+    ///
+    /// > **Note:** This is inconsistent with [`CstTree::tokens_of`] which
+    /// > only returns semantic (non-trivia) tokens. Prefer
+    /// > [`CstNode::direct_semantic_tokens`] when you want the same behaviour.
     pub fn direct_tokens(&self) -> impl Iterator<Item = SyntaxTokenId> + '_ {
         self.children.iter().filter_map(|c| c.child.as_token())
+    }
+
+    /// Returns the IDs of **semantic** (non-trivia) token children of this
+    /// node. Consistent with [`CstTree::tokens_of`].
+    ///
+    /// Use [`direct_tokens`](Self::direct_tokens) if you also need trivia tokens.
+    pub fn direct_semantic_tokens<'a>(
+        &'a self,
+        tree: &'a CstTree,
+    ) -> impl Iterator<Item = SyntaxTokenId> + 'a {
+        self.children
+            .iter()
+            .filter_map(|c| c.child.as_token())
+            .filter(move |&id| !tree.token(id).is_trivia)
     }
 
     pub fn direct_nodes(&self) -> impl Iterator<Item = SyntaxNodeId> + '_ {
@@ -236,10 +261,17 @@ impl CstTree {
     }
 
     pub fn walk_node(&self, node_id: SyntaxNodeId, visitor: &mut dyn crate::visitors::TreeVisitor) {
-        let node = self.node(node_id);
-        visitor.visit_node_enter(node, self);
-        for child in &node.children.clone() {
-            match child.child {
+        // Collect the lightweight `NodeOrToken` IDs (Copy) before any visitor call so
+        // that the borrow of `self` is not held across mutable visitor callbacks.
+        let children: Vec<NodeOrToken> = self.node(node_id)
+            .children
+            .iter()
+            .map(|c| c.child)
+            .collect();
+
+        visitor.visit_node_enter(self.node(node_id), self);
+        for child in children {
+            match child {
                 NodeOrToken::Node(id) => self.walk_node(id, visitor),
                 NodeOrToken::Token(id) => {
                     let tok = self.token(id);
@@ -251,8 +283,7 @@ impl CstTree {
                 }
             }
         }
-        let node = self.node(node_id);
-        visitor.visit_node_exit(node, self);
+        visitor.visit_node_exit(self.node(node_id), self);
     }
 }
 

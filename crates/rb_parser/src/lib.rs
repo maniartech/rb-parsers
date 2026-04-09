@@ -131,7 +131,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
             fn finish(self) {}
         }
 
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, recovery.clone(), source_id);
+        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
         let mut strategy = CallbackStrategy(emit);
         let mut recovery_steps = 0usize;
 
@@ -147,7 +147,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         recovery: &RecoveryConfig,
         source_id: SourceId,
     ) -> CstTree {
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, recovery.clone(), source_id);
+        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
         let mut strategy = CstBuildingStrategy::new(source_id);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
@@ -164,7 +164,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         source_id: SourceId,
         capacity_hint: usize,
     ) -> Vec<ParseEvent> {
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, recovery.clone(), source_id);
+        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
         let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];

@@ -293,6 +293,12 @@ pub fn grammar<R: RuleId>() -> GrammarBuilder<R> {
 impl<R: RuleId> GrammarBuilder<R> {
     pub fn rule(mut self, rule_id: R, rule: impl GrammarRule<R>) -> Self {
         let key = format!("{:?}", rule_id);
+        if self.rules.contains_key(&key) {
+            panic!(
+                "Grammar rule {:?} has already been registered. Each rule may only be registered once.",
+                rule_id
+            );
+        }
         self.rules.insert(key, (rule_id, rule.into()));
         self
     }

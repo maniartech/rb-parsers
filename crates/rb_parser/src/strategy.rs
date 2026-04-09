@@ -63,7 +63,7 @@ impl ParseStrategy for CstBuildingStrategy {
                     let children: Vec<CstNodeChild> =
                         self.children_arena.drain(arena_start..).collect();
                     let id = SyntaxNodeId(self.nodes.len() as u32);
-                    let node = CstNode { id, kind, span, children };
+                    let node = CstNode { id, kind, span, children, is_error_recovery: false };
                     self.nodes.push(node);
                     // Register completed node as a child of the enclosing node.
                     let not = NodeOrToken::Node(id);
@@ -104,7 +104,7 @@ impl ParseStrategy for CstBuildingStrategy {
                     self.children_arena.drain(arena_start..).collect();
                 let id = SyntaxNodeId(self.nodes.len() as u32);
                 let span = SourceSpan::new(self.source_id, start, start);
-                let node = CstNode { id, kind, span, children };
+                let node = CstNode { id, kind, span, children, is_error_recovery: true };
                 self.nodes.push(node);
                 let not = NodeOrToken::Node(id);
                 if self.stack.last().is_some() {
@@ -120,7 +120,7 @@ impl ParseStrategy for CstBuildingStrategy {
             let id = SyntaxNodeId(self.nodes.len() as u32);
             let end = self.tokens.last().map(|t| t.span.end).unwrap_or(start);
             let span = SourceSpan::new(self.source_id, start, end);
-            self.nodes.push(CstNode { id, kind, span, children });
+            self.nodes.push(CstNode { id, kind, span, children, is_error_recovery: false });
             id
         } else if !self.nodes.is_empty() {
             SyntaxNodeId((self.nodes.len() - 1) as u32)
@@ -132,6 +132,7 @@ impl ParseStrategy for CstBuildingStrategy {
                 kind: SyntaxKind::new("Root"),
                 span: SourceSpan::UNKNOWN,
                 children: Vec::new(),
+                is_error_recovery: false,
             });
             id
         };
