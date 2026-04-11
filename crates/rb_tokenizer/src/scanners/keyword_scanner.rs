@@ -1,6 +1,7 @@
 use super::scanner::Scanner;
 use super::word_boundary::WordBoundaryDef;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 /// Matches keywords (reserved words) with an automatic **word-boundary check**.
 ///
@@ -111,7 +112,7 @@ impl KeywordScanner {
 }
 
 impl Scanner for KeywordScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         for (keyword, sub_type) in &self.entries {
             if !input.starts_with(keyword.as_str()) {
                 continue;
@@ -124,7 +125,7 @@ impl Scanner for KeywordScanner {
             return Ok(Some(Token {
                 token_type: self.token_type,
                 token_sub_type: *sub_type,
-                value: keyword.clone(),
+                value: Cow::Borrowed(&input[..keyword.len()]),
                 span: SourceSpan::UNKNOWN,
             }));
         }

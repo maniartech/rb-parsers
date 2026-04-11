@@ -4,6 +4,7 @@ use super::contextual_scanner::ContextualScanner;
 use super::scan_context::ScanContext;
 use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 // ── Internal state ────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ impl IndentationScanner {
 }
 
 impl ContextualScanner for IndentationScanner {
-    fn scan(&self, input: &str, ctx: &mut ScanContext) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError> {
         // scan_into_match is the primary override; scan is not used directly.
         // Provide a no-op implementation to satisfy the trait.
         let _ = (input, ctx);
@@ -118,7 +119,7 @@ impl ContextualScanner for IndentationScanner {
     }
 
     /// Primary override — called by [`ScannerType::scan_contextually`].
-    fn scan_into_match(&self, input: &str, ctx: &mut ScanContext) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_into_match<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         // Only fire at the start of a line.
         if ctx.column != 1 {
             return Ok(None);
@@ -141,7 +142,7 @@ impl ContextualScanner for IndentationScanner {
             let token = Token {
                 token_type: self.indent_token_type,
                 token_sub_type: None,
-                value: input[..indent_bytes].to_string(),
+                value: Cow::Borrowed(&input[..indent_bytes]),
                 span: SourceSpan::UNKNOWN,
             };
             return Ok(Some(ScanMatch { consumed_len: indent_bytes, token }));
@@ -162,7 +163,7 @@ impl ContextualScanner for IndentationScanner {
                 token_sub_type: None,
                 // Value encodes the number of levels popped so the parser can
                 // know how many scopes to close in one shot.
-                value: levels.to_string(),
+                value: Cow::Owned(levels.to_string()),
                 span: SourceSpan::UNKNOWN,
             };
             // Consume the leading whitespace even though the value differs in length.

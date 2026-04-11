@@ -55,7 +55,7 @@ use super::scanner::ScanMatch;
 /// for position- or history-dependent decisions — for example, Python-style
 /// significant indentation.
 pub trait ContextualScanner: Send + Sync {
-    fn scan(&self, input: &str, ctx: &mut ScanContext) -> Result<Option<Token>, TokenizationError>;
+    fn scan<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError>;
 
     /// Like `scan` but returns a [`ScanMatch`] that separates the emitted [`Token`]
     /// from the number of bytes consumed from `input`.
@@ -66,7 +66,7 @@ pub trait ContextualScanner: Send + Sync {
     /// [`IndentationScanner`](crate::scanners::IndentationScanner), which needs to
     /// consume the leading whitespace bytes while emitting `DEDENT "N"` (a 1-byte
     /// value string encoding the number of levels popped).
-    fn scan_into_match(&self, input: &str, ctx: &mut ScanContext) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_into_match<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         self.scan(input, ctx).map(|r| r.map(|token| ScanMatch {
             consumed_len: token.value.len(),
             token,
@@ -79,7 +79,7 @@ pub trait ContextualScanner: Send + Sync {
 /// The closure receives the remaining input slice and a mutable reference to
 /// [`ScanContext`].  See [`ContextualScanner`] for usage examples.
 type ContextualScannerFn =
-    dyn Fn(&str, &mut ScanContext) -> Result<Option<Token>, TokenizationError> + Send + Sync;
+    dyn for<'i> Fn(&'i str, &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError> + Send + Sync;
 
 pub struct ContextualClosureScanner {
     cb: Box<ContextualScannerFn>,
@@ -87,7 +87,7 @@ pub struct ContextualClosureScanner {
 
 impl ContextualClosureScanner {
     pub fn new(
-        cb: impl Fn(&str, &mut ScanContext) -> Result<Option<Token>, TokenizationError>
+        cb: impl for<'i> Fn(&'i str, &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError>
             + Send
             + Sync
             + 'static,
@@ -97,7 +97,8 @@ impl ContextualClosureScanner {
 }
 
 impl ContextualScanner for ContextualClosureScanner {
-    fn scan(&self, input: &str, ctx: &mut ScanContext) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError> {
         (self.cb)(input, ctx)
     }
 }
+

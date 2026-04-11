@@ -3,6 +3,7 @@ use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
 use super::scanner::AcceptStrategy;
 use regex::Regex;
+use std::borrow::Cow;
 
 pub struct RegexScanner {
     pub pattern: Regex,
@@ -54,7 +55,7 @@ impl RegexScanner {
 }
 
 impl Scanner for RegexScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         if let Some(strategy) = &self.accept_strategy {
             if !strategy.accepts(input) {
                 return Ok(None);
@@ -68,14 +69,14 @@ impl Scanner for RegexScanner {
             return Ok(Some(Token {
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
-                value: mat.as_str().to_string(),
+                value: Cow::Borrowed(mat.as_str()),
                 span: SourceSpan::UNKNOWN,
             }))
         }
         Ok(None)
     }
 
-    fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         if let Some(strategy) = &self.accept_strategy {
             if !strategy.accepts(input) {
                 return Ok(None);
@@ -92,7 +93,7 @@ impl Scanner for RegexScanner {
                 token: Token {
                     token_type: self.token_type,
                     token_sub_type: self.token_sub_type,
-                    value: mat.as_str().to_string(),
+                    value: Cow::Borrowed(mat.as_str()),
                     span: SourceSpan::UNKNOWN,
                 },
             }));

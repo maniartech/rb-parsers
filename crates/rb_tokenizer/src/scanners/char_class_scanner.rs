@@ -1,5 +1,6 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 // ── Internal char-class representation ───────────────────────────────────────
 
@@ -132,23 +133,23 @@ impl CharClassScanner {
 }
 
 impl Scanner for CharClassScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
-        let mut chars = input.chars();
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
+        let mut chars = input.char_indices();
 
         // Check lead character.
-        let first = match chars.next() {
-            Some(c) if self.lead.matches(c) => c,
+        let (_, first_char) = match chars.next() {
+            Some((pos, c)) if self.lead.matches(c) => (pos, c),
             _ => return Ok(None),
         };
 
-        let mut value = String::new();
-        value.push(first);
+        // Track exclusive end byte of the last accepted character.
+        let mut byte_end = first_char.len_utf8();
 
         // Consume continuation characters.
         if let Some(cont) = &self.continuation {
-            for c in chars {
+            for (byte_pos, c) in chars {
                 if cont.matches(c) {
-                    value.push(c);
+                    byte_end = byte_pos + c.len_utf8();
                 } else {
                     break;
                 }
@@ -158,7 +159,7 @@ impl Scanner for CharClassScanner {
         Ok(Some(Token {
             token_type: self.token_type,
             token_sub_type: self.token_sub_type,
-            value,
+            value: Cow::Borrowed(&input[..byte_end]),
             span: SourceSpan::UNKNOWN,
         }))
     }

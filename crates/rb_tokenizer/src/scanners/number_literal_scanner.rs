@@ -1,5 +1,6 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 /// A declarative, configurable scanner for numeric literals.
 ///
@@ -140,7 +141,7 @@ fn consume_digits<F: Fn(char) -> bool>(
 }
 
 impl Scanner for NumberLiteralScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
             return Ok(None);
@@ -172,7 +173,7 @@ impl Scanner for NumberLiteralScanner {
             return Ok(Some(Token {
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
-                value: input[..pos].to_string(),
+                value: Cow::Borrowed(&input[..pos]),
                 span: SourceSpan::UNKNOWN,
             }));
         }
@@ -196,7 +197,7 @@ impl Scanner for NumberLiteralScanner {
                         return Ok(Some(Token {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
-                            value: input[..end].to_string(),
+                            value: Cow::Borrowed(&input[..end]),
                             span: SourceSpan::UNKNOWN,
                         }));
                     }
@@ -212,7 +213,7 @@ impl Scanner for NumberLiteralScanner {
                         return Ok(Some(Token {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
-                            value: input[..end].to_string(),
+                            value: Cow::Borrowed(&input[..end]),
                             span: SourceSpan::UNKNOWN,
                         }));
                     }
@@ -228,7 +229,7 @@ impl Scanner for NumberLiteralScanner {
                         return Ok(Some(Token {
                             token_type: self.token_type,
                             token_sub_type: self.token_sub_type,
-                            value: input[..end].to_string(),
+                            value: Cow::Borrowed(&input[..end]),
                             span: SourceSpan::UNKNOWN,
                         }));
                     }
@@ -280,7 +281,7 @@ impl Scanner for NumberLiteralScanner {
         Ok(Some(Token {
             token_type: self.token_type,
             token_sub_type: self.token_sub_type,
-            value: input[..pos].to_string(),
+            value: Cow::Borrowed(&input[..pos]),
             span: SourceSpan::UNKNOWN,
         }))
     }

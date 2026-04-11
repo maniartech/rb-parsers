@@ -1,5 +1,6 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 /// Matches multi-character (and single-character) operators using a
 /// **longest-match-first** strategy with **no word-boundary check**.
@@ -79,13 +80,13 @@ impl OperatorScanner {
 }
 
 impl Scanner for OperatorScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         for (operator, sub_type) in &self.entries {
             if input.starts_with(operator.as_str()) {
                 return Ok(Some(Token {
                     token_type: self.token_type,
                     token_sub_type: *sub_type,
-                    value: operator.clone(),
+                    value: Cow::Borrowed(&input[..operator.len()]),
                     span: SourceSpan::UNKNOWN,
                 }));
             }

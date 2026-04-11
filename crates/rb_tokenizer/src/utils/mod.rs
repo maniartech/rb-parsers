@@ -2,7 +2,7 @@ use crate::tokens::Token;
 use std::fmt::Write;
 
 /// Pretty prints a list of tokens in a human-readable format
-pub fn pretty_print_tokens(tokens: &[Token]) -> String {
+pub fn pretty_print_tokens(tokens: &[Token<'_>]) -> String {
     let mut output = String::new();
     writeln!(&mut output, "Tokens:").unwrap();
     for (i, token) in tokens.iter().enumerate() {
@@ -22,7 +22,7 @@ pub fn pretty_print_tokens(tokens: &[Token]) -> String {
 }
 
 /// Returns a compact single-line representation of a token for debug output
-pub fn token_summary(token: &Token) -> String {
+pub fn token_summary(token: &Token<'_>) -> String {
     format!(
         "{}:{} '{}'",
         token.token_type,
@@ -32,7 +32,7 @@ pub fn token_summary(token: &Token) -> String {
 }
 
 /// Creates a table-like view of tokens for comparing expected vs actual results
-pub fn compare_tokens(expected: &[Token], actual: &[Token]) -> String {
+pub fn compare_tokens<'a>(expected: &[Token<'a>], actual: &[Token<'a>]) -> String {
     let mut output = String::new();
     writeln!(&mut output, "Token Comparison:").unwrap();
     writeln!(&mut output, "{:3} {:^40} {:^40}", "", "Expected", "Actual").unwrap();
@@ -60,7 +60,7 @@ pub fn compare_tokens(expected: &[Token], actual: &[Token]) -> String {
 }
 
 /// Generates a visual representation of token positions in the input text
-pub fn visualize_token_positions(input: &str, tokens: &[Token]) -> String {
+pub fn visualize_token_positions(input: &str, tokens: &[Token<'_>]) -> String {
     let mut output = String::new();
     let mut lines: Vec<String> = input.lines().map(|s| s.to_string()).collect();
     if !input.ends_with('\n') {
@@ -97,7 +97,7 @@ pub fn visualize_token_positions(input: &str, tokens: &[Token]) -> String {
 }
 
 /// Provides detailed token analysis including statistics and potential issues
-pub fn analyze_tokens(tokens: &[Token]) -> String {
+pub fn analyze_tokens(tokens: &[Token<'_>]) -> String {
     let mut output = String::new();
     let mut type_counts = std::collections::HashMap::new();
     let mut subtype_counts = std::collections::HashMap::new();

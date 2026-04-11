@@ -1,6 +1,7 @@
 use super::scanner::Scanner;
 use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 /// `EolScanner` implementation for parsing structures that start with a specific delimiter
 /// and continue until the end of line. This scanner handles structures like line comments,
@@ -57,7 +58,7 @@ impl EolScanner {
 }
 
 impl Scanner for EolScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         // Check if the input starts with the delimiter
         if !input.starts_with(&self.delimiter) {
             return Ok(None);
@@ -65,12 +66,10 @@ impl Scanner for EolScanner {
 
         // Find the end of line
         if let Some(end_pos) = self.find_line_end(input) {
-            let full_match = &input[0..end_pos];
-
-            let token_value = if self.include_delimiter {
-                full_match.to_string()
+            let token_value: Cow<'i, str> = if self.include_delimiter {
+                Cow::Borrowed(&input[0..end_pos])
             } else {
-                input[self.delimiter.len()..end_pos].to_string()
+                Cow::Borrowed(&input[self.delimiter.len()..end_pos])
             };
 
             // Create token with the correct value
@@ -87,18 +86,16 @@ impl Scanner for EolScanner {
         }
     }
 
-    fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         if !input.starts_with(&self.delimiter) {
             return Ok(None);
         }
 
         if let Some(end_pos) = self.find_line_end(input) {
-            let full_match = &input[0..end_pos];
-
-            let token_value = if self.include_delimiter {
-                full_match.to_string()
+            let token_value: Cow<'i, str> = if self.include_delimiter {
+                Cow::Borrowed(&input[0..end_pos])
             } else {
-                input[self.delimiter.len()..end_pos].to_string()
+                Cow::Borrowed(&input[self.delimiter.len()..end_pos])
             };
 
             return Ok(Some(ScanMatch {

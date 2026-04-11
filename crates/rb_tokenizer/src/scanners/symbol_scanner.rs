@@ -1,5 +1,6 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 pub struct SymbolScanner {
     pub symbol: String,
@@ -18,11 +19,11 @@ impl SymbolScanner {
 }
 
 impl Scanner for SymbolScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         if input.starts_with(&self.symbol) {
             Ok(Some(Token {
                 span: SourceSpan::UNKNOWN,
-                value: self.symbol.clone(),
+                value: Cow::Borrowed(&input[..self.symbol.len()]),
                 token_type: self.token_type,
                 token_sub_type: self.token_sub_type,
             }))

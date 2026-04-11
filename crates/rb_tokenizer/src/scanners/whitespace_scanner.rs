@@ -1,5 +1,6 @@
 use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
+use std::borrow::Cow;
 
 /// Tokenizes whitespace with configurable treatment of newlines and line
 /// continuations.
@@ -122,7 +123,7 @@ impl WhitespaceScanner {
 }
 
 impl Scanner for WhitespaceScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         let first = match input.chars().next() {
             None => return Ok(None),
             Some(c) => c,
@@ -144,7 +145,7 @@ impl Scanner for WhitespaceScanner {
                     return Ok(Some(Token {
                         token_type: cont_type,
                         token_sub_type: None,
-                        value: input[..total].to_string(),
+                        value: Cow::Borrowed(&input[..total]),
                         span: SourceSpan::UNKNOWN,
                     }));
                 }
@@ -165,7 +166,7 @@ impl Scanner for WhitespaceScanner {
                 return Ok(Some(Token {
                     token_type: nl_type,
                     token_sub_type: None,
-                    value: input[..len].to_string(),
+                    value: Cow::Borrowed(&input[..len]),
                     span: SourceSpan::UNKNOWN,
                 }));
             }
@@ -198,7 +199,7 @@ impl Scanner for WhitespaceScanner {
         Ok(Some(Token {
             token_type: self.token_type,
             token_sub_type: None,
-            value: input[..len].to_string(),
+            value: Cow::Borrowed(&input[..len]),
             span: SourceSpan::UNKNOWN,
         }))
     }
