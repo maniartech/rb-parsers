@@ -38,9 +38,9 @@ pub enum ScannerType {
 }
 
 pub trait CallbackScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError>;
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError>;
 
-    fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         self.scan(input).map(|result| {
             result.map(|token| ScanMatch {
                 consumed_len: token.value.len(),
@@ -51,7 +51,7 @@ pub trait CallbackScanner {
 }
 
 impl Scanner for ScannerType {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         match self {
             ScannerType::Symbol(scanner)        => scanner.scan(input),
             ScannerType::Regex(scanner)         => scanner.scan(input),
@@ -72,7 +72,7 @@ impl Scanner for ScannerType {
         }
     }
 
-    fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
+    fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         match self {
             ScannerType::Symbol(scanner)        => scanner.scan_with_context(input),
             ScannerType::Regex(scanner)         => scanner.scan_with_context(input),
@@ -96,11 +96,11 @@ impl ScannerType {
     /// scanners, and falls back to the standard `scan_with_context` path for all others.
     ///
     /// Used by [`Tokenizer::tokenize_contextual`](crate::tokenizers::Tokenizer::tokenize_contextual).
-    pub fn scan_contextually(
+    pub fn scan_contextually<'i>(
         &self,
-        input: &str,
+        input: &'i str,
         ctx: &mut ScanContext,
-    ) -> Result<Option<ScanMatch>, TokenizationError> {
+    ) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         match self {
             ScannerType::Contextual(scanner) => scanner.scan_into_match(input, ctx),
             _ => self.scan_with_context(input),
