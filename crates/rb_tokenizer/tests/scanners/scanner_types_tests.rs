@@ -45,12 +45,12 @@ mod scanner_types_tests {
         struct TestCallbackScanner;
 
         impl CallbackScanner for TestCallbackScanner {
-            fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+            fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
                 if input.starts_with("test") {
                     Ok(Some(Token {
                         token_type: "TEST",
                         token_sub_type: None,
-                        value: "test".to_string(),
+                        value: std::borrow::Cow::Borrowed(&input[..4]),
                         span: rb_tokenizer::tokens::SourceSpan::UNKNOWN,
                     }))
                 } else {
@@ -83,7 +83,7 @@ mod scanner_types_tests {
         struct ErrorCallbackScanner;
 
         impl CallbackScanner for ErrorCallbackScanner {
-            fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+            fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
                 if input.starts_with("error") {
                     Err(TokenizationError::UnrecognizedToken("Test error".to_string()))
                 } else {

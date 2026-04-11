@@ -10,7 +10,7 @@ fn get_ejs_tokenizer() -> Tokenizer {
     let mut tokenizer = Tokenizer::with_config(config);
 
     // HTML content fallback (adding this first so it has lowest priority)
-    tokenizer.add_closure_scanner(Box::new(|input: &str| -> Result<Option<rb_tokenizer::tokens::Token>, rb_tokenizer::tokens::TokenizationError> {
+    tokenizer.add_closure_scanner(Box::new(|input: &str| -> Result<Option<rb_tokenizer::tokens::Token<'_>>, rb_tokenizer::tokens::TokenizationError> {
         // If the input starts with an EJS tag opener or the closing `%>`,
         // let the dedicated block scanners handle it.
         if input.starts_with("<%") || input.starts_with("%>") {
@@ -39,7 +39,7 @@ fn get_ejs_tokenizer() -> Tokenizer {
             Ok(Some(rb_tokenizer::tokens::Token {
                 token_type: "HTML",
                 token_sub_type: None,
-                value: html_content.to_string(),
+                value: std::borrow::Cow::Borrowed(html_content),
                 span: rb_tokenizer::tokens::SourceSpan::UNKNOWN,
             }))
         }

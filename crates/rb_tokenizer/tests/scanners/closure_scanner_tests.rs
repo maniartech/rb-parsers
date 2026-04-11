@@ -10,12 +10,12 @@ mod closure_scanner_tests {
 
     #[test]
     fn test_basic_closure_scanner() {
-        let scanner = ClosureScanner::new(Box::new(|input: &str| -> Result<Option<Token>, TokenizationError> {
+        let scanner = ClosureScanner::new(Box::new(|input: &str| {
             if input.starts_with("test") {
                 let token = Token {
                     token_type: "TEST",
                     token_sub_type: None,
-                    value: "test".to_string(),
+                    value: std::borrow::Cow::Borrowed(&input[..4]),
                     span: rb_tokenizer::tokens::SourceSpan::UNKNOWN,
                 };
                 Ok(Some(token))

@@ -841,7 +841,7 @@ mod enhanced_escape_tests {
 
         let kw_values: Vec<_> = result.iter()
             .filter(|t| t.token_type == "Keyword")
-            .map(|t| t.value.as_str())
+            .map(|t| t.value.as_ref())
             .collect();
         assert!(kw_values.contains(&"int"),    "expected 'int'");
         assert!(kw_values.contains(&"void"),   "expected 'void'");
@@ -900,7 +900,7 @@ mod enhanced_escape_tests {
 
         let identifiers: Vec<_> = result.iter()
             .filter(|t| t.token_type == "Identifier")
-            .map(|t| t.value.as_str())
+            .map(|t| t.value.as_ref())
             .collect();
 
         assert!(identifiers.contains(&"empty?"), "empty? should be one Identifier token");
@@ -917,7 +917,7 @@ mod enhanced_escape_tests {
 
         let kw_values: Vec<_> = result.iter()
             .filter(|t| t.token_type == "Keyword")
-            .map(|t| t.value.as_str())
+            .map(|t| t.value.as_ref())
             .collect();
 
         assert!(kw_values.contains(&"if"),   "expected 'if' keyword");

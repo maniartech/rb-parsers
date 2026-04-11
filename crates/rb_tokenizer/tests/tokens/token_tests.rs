@@ -1,4 +1,5 @@
 use rb_tokenizer::tokens::{Token, SourceId, SourcePosition, SourceSpan};
+use std::borrow::Cow;
 
 #[cfg(test)]
 mod token_tests {
@@ -9,7 +10,7 @@ mod token_tests {
         let token = Token {
             token_type: "IDENTIFIER",
             token_sub_type: Some("VARIABLE"),
-            value: "myVariable".to_string(),
+            value: Cow::Borrowed("myVariable"),
             span: SourceSpan {
                 source_id: SourceId::UNKNOWN,
                 start: SourcePosition { byte_offset: 0, line: 41, column: 9 },
@@ -30,7 +31,7 @@ mod token_tests {
         let token = Token {
             token_type: "NUMBER",
             token_sub_type: None,
-            value: "123.45".to_string(),
+            value: Cow::Borrowed("123.45"),
             span: SourceSpan::UNKNOWN,
         };
 
@@ -44,21 +45,21 @@ mod token_tests {
         let token1 = Token {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
-            value: "if".to_string(),
+            value: Cow::Borrowed("if"),
             span: SourceSpan::UNKNOWN,
         };
 
         let token2 = Token {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
-            value: "if".to_string(),
+            value: Cow::Borrowed("if"),
             span: SourceSpan::UNKNOWN,
         };
 
         let different_token = Token {
             token_type: "KEYWORD",
             token_sub_type: Some("CONTROL"),
-            value: "else".to_string(),
+            value: Cow::Borrowed("else"),
             span: SourceSpan::UNKNOWN,
         };
 
@@ -72,7 +73,7 @@ mod token_tests {
         let original = Token {
             token_type: "STRING",
             token_sub_type: Some("DOUBLE_QUOTED"),
-            value: "Hello, world!".to_string(),
+            value: Cow::Borrowed("Hello, world!"),
             span: SourceSpan {
                 source_id: SourceId::UNKNOWN,
                 start: SourcePosition { byte_offset: 0, line: 6, column: 11 },
@@ -96,7 +97,7 @@ mod token_tests {
         let token = Token {
             token_type: "OPERATOR",
             token_sub_type: Some("ARITHMETIC"),
-            value: "+".to_string(),
+            value: Cow::Borrowed("+"),
             span: SourceSpan {
                 source_id: SourceId::UNKNOWN,
                 start: SourcePosition { byte_offset: 0, line: 14, column: 7 },
@@ -120,7 +121,7 @@ mod token_tests {
         let token = Token {
             token_type: "COMMENT",
             token_sub_type: Some("BLOCK"),
-            value: "/* This is\na multiline\ncomment */".to_string(),
+            value: Cow::Borrowed("/* This is\na multiline\ncomment */"),
             span: SourceSpan::UNKNOWN,
         };
 

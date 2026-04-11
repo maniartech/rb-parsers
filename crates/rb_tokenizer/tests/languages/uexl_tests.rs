@@ -124,17 +124,17 @@ mod tests {
             // Verify we got the valid tokens around the error
             let token_values: Vec<_> = tokens.iter()
                 .filter(|t| t.token_type == "Number" || t.token_type == "Bracket" || t.token_type == "Comma")
-                .map(|t| &t.value)
+                .map(|t| t.value.as_ref())
                 .collect();
 
             println!("Token values: {:?}", token_values);
 
             // We should have [, 1, ,, 2, ,, 4, ]
-            assert!(token_values.contains(&&"[".to_string()), "Should have opening bracket");
-            assert!(token_values.contains(&&"1".to_string()), "Should have first number");
-            assert!(token_values.contains(&&"2".to_string()), "Should have second number");
-            assert!(token_values.contains(&&"4".to_string()), "Should have last number");
-            assert!(token_values.contains(&&"]".to_string()), "Should have closing bracket");
+            assert!(token_values.contains(&"["), "Should have opening bracket");
+            assert!(token_values.contains(&"1"), "Should have first number");
+            assert!(token_values.contains(&"2"), "Should have second number");
+            assert!(token_values.contains(&"4"), "Should have last number");
+            assert!(token_values.contains(&"]"), "Should have closing bracket");
         }
     }
 }

@@ -54,7 +54,7 @@ mod json_tests {
         let result = tokenizer.tokenize(json_input).expect("Tokenization failed");
 
         let actual: Vec<_> = result.iter()
-            .map(|token| (token.token_type, token.token_sub_type, token.value.as_str()))
+            .map(|token| (token.token_type, token.token_sub_type, token.value.as_ref()))
             .collect();
 
         let expected = vec![
@@ -94,7 +94,7 @@ mod json_tests {
         pretty_print_tokens(&result);
 
         let actual: Vec<_> = result.iter()
-            .map(|token| (token.token_type, token.token_sub_type, token.value.as_str()))
+            .map(|token| (token.token_type, token.token_sub_type, token.value.as_ref()))
             .collect();
 
         let expected = vec![

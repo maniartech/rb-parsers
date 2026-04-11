@@ -1,39 +1,40 @@
 use rb_tokenizer::{tokens::{Token, SourceSpan}, utils};
+use std::borrow::Cow;
 
 #[cfg(test)]
 mod utils_tests {
     use super::*;
 
-    fn create_test_tokens() -> Vec<Token> {
+    fn create_test_tokens() -> Vec<Token<'static>> {
         vec![
             Token {
                 token_type: "IDENTIFIER",
                 token_sub_type: Some("VARIABLE"),
-                value: "myVar".to_string(),
+                value: Cow::Borrowed("myVar"),
                 span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "OPERATOR",
                 token_sub_type: Some("ASSIGNMENT"),
-                value: "=".to_string(),
+                value: Cow::Borrowed("="),
                 span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "NUMBER",
                 token_sub_type: None,
-                value: "42".to_string(),
+                value: Cow::Borrowed("42"),
                 span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "PUNCTUATION",
                 token_sub_type: Some("SEMICOLON"),
-                value: ";".to_string(),
+                value: Cow::Borrowed(";"),
                 span: SourceSpan::UNKNOWN,
             },
             Token {
                 token_type: "WHITESPACE",
                 token_sub_type: Some("NEWLINE"),
-                value: "\n".to_string(),
+                value: Cow::Borrowed("\n"),
                 span: SourceSpan::UNKNOWN,
             },
         ]
@@ -63,7 +64,7 @@ mod utils_tests {
         let token = Token {
             token_type: "STRING",
             token_sub_type: Some("DOUBLE_QUOTED"),
-            value: "Hello\nWorld".to_string(),
+            value: Cow::Borrowed("Hello\nWorld"),
             span: SourceSpan::UNKNOWN,
         };
 
@@ -82,7 +83,7 @@ mod utils_tests {
 
         // Modify one token in the actual result to create a difference
         if !actual.is_empty() {
-            actual[0].value = "differentVar".to_string();
+            actual[0].value = Cow::Owned("differentVar".to_string());
         }
 
         // Get comparison output
