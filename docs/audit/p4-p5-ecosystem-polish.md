@@ -317,3 +317,277 @@ parameters:
 #[deprecated(since = "0.2.0", note = "Use `DiagnosticSeverity::Error` instead")]
 pub type OldSeverityName = DiagnosticSeverity;
 ```
+
+---
+
+## E3 · No kind-dispatched visitor — grammar authors repeat `if node.kind == …` everywhere
+
+**Layer**: `visitor` crate · P4
+**File**: `crates/visitor/src/lib.rs`
+
+The only visitor interface is `TreeVisitor`, which has generic `visit_node_enter` /
+`visit_node_exit` hooks. Every implementor must write its own `if node.kind == …` or
+`match node.kind.as_str()` dispatch inside those hooks. A grammar with 20 node kinds
+produces 20-way matches duplicated across every visitor implementation in every
+downstream crate.
+
+### Missing API
+
+```rust
+/// A visitor that dispatches on `SyntaxKind`. Handlers are registered at
+/// construction time and called only for matching nodes.
+pub struct KindVisitor<'h> {
+    enter_handlers: Vec<(SyntaxKind, Box<dyn Fn(&CstNode, &CstTree) + 'h>)>,
+    exit_handlers:  Vec<(SyntaxKind, Box<dyn Fn(&CstNode, &CstTree) + 'h>)>,
+}
+
+impl<'h> KindVisitor<'h> {
+    pub fn new() -> Self { ... }
+    pub fn on_enter(mut self, kind: SyntaxKind, f: impl Fn(&CstNode, &CstTree) + 'h) -> Self { ... }
+    pub fn on_exit(mut self, kind: SyntaxKind,  f: impl Fn(&CstNode, &CstTree) + 'h) -> Self { ... }
+}
+
+impl TreeVisitor for KindVisitor<'_> {
+    fn visit_node_enter(&mut self, node: &CstNode, tree: &CstTree) {
+        for (kind, handler) in &self.enter_handlers {
+            if *kind == node.kind { handler(node, tree); }
+        }
+    }
+    // ... exit mirror
+}
+```
+
+### Usage
+
+```rust
+let mut visitor = KindVisitor::new()
+    .on_enter(SyntaxKind::new("FunctionDef"), |node, tree| {
+        println!("function at {:?}", node.span);
+    })
+    .on_enter(SyntaxKind::new("CallExpr"), |node, tree| {
+        println!("call at {:?}", node.span);
+    });
+DepthFirstWalker::new(&mut visitor).walk(&tree);
+```
+
+### Dependency
+
+None. Purely additive to the `visitor` crate. No interaction with P1/P2 work.
+
+---
+
+## E4 · No cursor / navigation API — subtree traversal requires a full tree walk
+
+**Layer**: `visitor` crate · P4
+**File**: `crates/visitor/src/lib.rs`
+
+`DepthFirstWalker` walks the entire tree. There is no API to:
+
+- Navigate from a `CstNode` to its parent, first child, or next sibling.
+- Find the first descendant matching a `SyntaxKind` without a full tree walk.
+- Access named fields by name from a cursor position.
+
+This makes IDE-style operations (hover type, go-to-definition, refactor at cursor)
+impossible to implement without hand-rolling tree traversal from scratch in every
+downstream tool.
+
+### Missing API
+
+```rust
+pub struct SyntaxCursor<'t> {
+    tree:    &'t CstTree,
+    node_id: SyntaxNodeId,
+}
+
+impl<'t> SyntaxCursor<'t> {
+    pub fn new(tree: &'t CstTree, node_id: SyntaxNodeId) -> Self;
+    pub fn kind(&self) -> SyntaxKind;
+    pub fn span(&self) -> SourceSpan;
+
+    // Navigation
+    pub fn parent(&self) -> Option<SyntaxCursor<'t>>;
+    pub fn first_child(&self) -> Option<SyntaxCursor<'t>>;
+    pub fn last_child(&self) -> Option<SyntaxCursor<'t>>;
+    pub fn next_sibling(&self) -> Option<SyntaxCursor<'t>>;
+    pub fn prev_sibling(&self) -> Option<SyntaxCursor<'t>>;
+
+    // Typed access
+    pub fn child_of_kind(&self, kind: SyntaxKind) -> Option<SyntaxCursor<'t>>;
+    pub fn field(&self, name: &str) -> Option<SyntaxCursor<'t>>;
+    pub fn children(&self) -> impl Iterator<Item = SyntaxCursor<'t>>;
+
+    // Leaf access
+    pub fn as_token(&self) -> Option<&'t CstToken>;
+    pub fn text<'s>(&self, source: &'s str) -> Option<&'s str>;
+
+    // Upward search
+    pub fn ancestor_of_kind(&self, kind: SyntaxKind) -> Option<SyntaxCursor<'t>>;
+}
+```
+
+Efficient `parent()` requires a `parent_id: Option<SyntaxNodeId>` field on `CstNode`
+(or a separate `parent_table: Vec<Option<SyntaxNodeId>>` built once in `CstTree::finish()`).
+
+### Impact
+
+`SyntaxCursor` is the prerequisite for:
+- C19 `AstLoweringStrategy` implementations (cursor-driven CST descent)
+- IDE language server "position to node" mapping
+- `CstToken::text()` helper (C18) — cursor makes it discoverable
+
+### Dependency
+
+None for the read API. Efficient O(1) parent navigation requires adding
+`parent_id` to `CstNode` or building a reverse index — a contained change to
+`crates/rb_parser/src/cst.rs` and `strategy.rs`.
+
+---
+
+## E5 · No path-aware visitor — context-sensitive analysis requires manual ancestor tracking
+
+**Layer**: `visitor` crate · P4
+**File**: `crates/visitor/src/lib.rs`
+
+`TreeVisitor::visit_node_enter` receives only `(node, tree)`. There is no access to the
+ancestor chain. Context-sensitive analysis (e.g. "is this identifier used in a
+type-annotation position?", "is this expression inside a loop body?") requires the
+visitor implementation to maintain its own ancestor stack independently.
+
+Every downstream project that performs context-sensitive analysis re-implements the
+same ancestor-stack boilerplate, and typically gets the push/pop balance wrong in the
+presence of error-recovery nodes.
+
+### Missing API
+
+```rust
+pub trait ContextualVisitor {
+    fn visit_node_enter(&mut self, node: &CstNode, ancestors: &[SyntaxNodeId], tree: &CstTree) {}
+    fn visit_node_exit(&mut self, node: &CstNode, ancestors: &[SyntaxNodeId], tree: &CstTree) {}
+    fn visit_token(&mut self, token: &CstToken, ancestors: &[SyntaxNodeId], tree: &CstTree) {}
+}
+
+pub struct ContextualWalker<'a, V: ContextualVisitor> {
+    visitor:   &'a mut V,
+    ancestors: Vec<SyntaxNodeId>,
+}
+
+impl<'a, V: ContextualVisitor> ContextualWalker<'a, V> {
+    pub fn walk(&mut self, tree: &CstTree) { ... }
+}
+```
+
+The walker maintains `ancestors: Vec<SyntaxNodeId>` internally, pushing on
+`NodeStart` and popping on `NodeEnd`. Implementations receive the stack by shared
+reference and can call `tree.node(id)` to inspect any ancestor.
+
+### Dependency
+
+None. Purely additive. Orthogonal to E3 and E4.
+
+---
+
+## E6 · No event-streaming visitor — every analysis pass forces full CST materialization
+
+**Layer**: `rb_parser` / `visitor` crate · P4
+**File**: `crates/rb_parser/src/strategy.rs`, `crates/visitor/src/lib.rs`
+
+The `ParseStrategy` trait exists and is the correct extension point for zero-CST
+consumers, but it is not exported from the `visitor` crate and has no convenience
+adapter. External consumers who want to run an analysis pass without building a CST
+must implement the internal `ParseStrategy` trait directly, bypassing the `visitor`
+crate entirely and taking a hard dependency on `rb_parser` internals.
+
+### Missing API
+
+```rust
+// In visitor crate — a public, stable shim over ParseStrategy
+
+/// Visitor that receives parse events directly from the engine, with no CST built.
+/// Implement this to run a single-pass analysis at parse speed.
+pub trait StreamVisitor {
+    fn on_node_enter(&mut self, kind: SyntaxKind, span_start: SourcePosition) {}
+    fn on_node_exit(&mut self, kind: SyntaxKind, span: SourceSpan) {}
+    fn on_token(&mut self, token_type: &'static str, span: SourceSpan, is_trivia: bool) {}
+    fn on_error(&mut self, diagnostic: &Diagnostic) {}
+}
+
+/// Adapter: wraps a `StreamVisitor` as a `ParseStrategy` so it can be passed to
+/// `CompiledParser::parse_with_strategy`.
+pub struct StreamVisitorStrategy<V: StreamVisitor> {
+    pub visitor: V,
+}
+
+impl<V: StreamVisitor> ParseStrategy for StreamVisitorStrategy<V> {
+    type Output = V;
+    fn on_event(&mut self, event: ParseEvent) { /* dispatch to visitor */ }
+    fn finish(self) -> V { self.visitor }
+}
+```
+
+### Impact
+
+Enables a class of "compile-as-you-lex" tools:
+- Linters that only need to examine specific node kinds
+- Symbol indexers that collect definitions without a full CST
+- Syntax highlighters that process the event stream line-by-line
+
+All of these currently require building a full `CstTree` and then walking it — two
+passes and peak memory for the full tree. `StreamVisitor` reduces this to one pass
+with O(1) working memory.
+
+### Dependency
+
+Requires `CompiledParser::parse_with_strategy` to be public API (it currently exists
+internally). No dependency on B4 or P2 work.
+
+---
+
+## E7 · No mutable / transform visitor — CST rewrites require manual tree reconstruction
+
+**Layer**: `visitor` crate · P4/P5
+**File**: `crates/visitor/src/lib.rs`
+
+All existing visitor hooks take `&CstNode` (shared reference). There is no supported
+pattern for:
+
+- Desugaring (replace a `ForIn` node with an equivalent `While` + `Let` subtree)
+- Macro expansion (replace a `MacroCall` node with the expanded subtree)
+- Normalization (remove redundant parentheses, collapse nested `Seq` nodes)
+
+Attempting these requires rebuilding the entire `CstTree` from scratch via a new
+parse, which discards error-recovery context and is O(N) for a single localized change.
+
+### Missing API
+
+```rust
+pub enum TransformAction {
+    /// Keep node unchanged.
+    Keep,
+    /// Remove node from parent (node becomes empty in parent's children list).
+    Remove,
+    /// Replace node with a new subtree.
+    Replace(CstNode),
+    /// Replace node with multiple siblings.
+    Expand(Vec<CstNode>),
+}
+
+pub trait TreeTransform {
+    fn transform_node(&mut self, node: &CstNode, tree: &CstTree) -> TransformAction;
+}
+
+impl CstTree {
+    pub fn apply_transform(&self, transform: &mut dyn TreeTransform) -> CstTree { ... }
+}
+```
+
+### Dependency
+
+**Must be implemented after C8** (flat arena CST). The current `Vec<CstNodeChild>` per
+node makes efficient tree mutation straightforward (swap out the `Vec`), but C8 removes
+those per-node `Vec`s in favour of a flat arena. A mutable transform over a flat arena
+requires either a copy-on-write scheme or a separate mutation buffer. Implementing
+`TreeTransform` before C8 would require a second rewrite of the mutability model once
+C8 lands.
+
+Flag: implement the trait and `TransformAction` enum now (documentation + stable API
+shape), defer the `apply_transform` implementation body until after C8.

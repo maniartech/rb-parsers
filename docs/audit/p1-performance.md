@@ -384,3 +384,182 @@ pub struct CstNode {
 allocation. This also eliminates the C1 `clone()` fix because the borrow is now into
 `tree.children_store`, which is independent of the node under the visitor's mutable
 reference.
+
+---
+
+## E1 · Trivia token types not configurable — trivia always flows into the parser
+
+**Layer**: `rb_tokenizer`
+**File**: `crates/rb_tokenizer/src/tokenizers/tokenizer.rs`
+**Expected impact**: 5–15% on source-code inputs with heavy whitespace/comments; zero impact on JSON-style inputs.
+
+### Root Cause
+
+`TokenizerConfig` has a single `tokenize_whitespace: bool` flag (default `false`) that
+only suppresses `WhitespaceScanner` output. All other token types — line comments,
+block comments, shebangs, BOMs — flow unconditionally into `Vec<Token>` regardless of
+whether the grammar needs them.
+
+The parser marks tokens as `is_trivia: true` in `ParseEvent::Token` and `CstToken`,
+meaning trivia tokens traverse the full pipeline (tokenizer → `Vec<Token>` → parse
+engine → `CstBuildingStrategy::on_event` → `CstNode::children`) even when they carry
+no semantic content and exist solely for formatter round-tripping.
+
+For a minified source file the cost is zero. For well-commented, indented source code
+(the common case for a language server) trivia tokens can outnumber semantic tokens 3:1.
+Every one of those tokens incurs allocation (B4), position tracking (B5), and CST
+insertion overhead (C8) regardless of whether the consumer will ever look at them.
+
+### Fix
+
+Extend `TokenizerConfig` with a set of token types to be silently discarded after
+matching — never emitted to the output stream:
+
+```rust
+pub struct TokenizerConfig {
+    pub tokenize_whitespace: bool,
+    /// Token types in this set are matched (so they are consumed from the input)
+    /// but never emitted. The consumer never sees them.
+    pub drop_token_types: std::collections::HashSet<&'static str>,
+    // ...
+}
+```
+
+Grammar authors declare trivia for their language once, at tokenizer construction:
+
+```rust
+config.drop_token_types.insert("WHITESPACE");
+config.drop_token_types.insert("LINE_COMMENT");
+config.drop_token_types.insert("BLOCK_COMMENT");
+```
+
+The hot loop drops the match immediately after `consumed_len` is known, before
+allocating a `Token`:
+
+```rust
+// tokenizer hot loop — after a match is found
+if self.config.drop_token_types.contains(match_.token.token_type) {
+    byte_offset += match_.consumed_len;
+    continue;   // advance cursor, emit nothing
+}
+// ... rest of token construction
+```
+
+A complementary `TriviaMode` enum can provide higher-level control for consumers
+that do need trivia (formatters, refactoring tools):
+
+```rust
+pub enum TriviaMode {
+    /// Trivia tokens are dropped at the tokenizer; the CST has no trivia nodes.
+    /// Best for compilers and semantic-only tools.
+    Drop,
+    /// Trivia tokens flow through the pipeline; the CST marks them `is_trivia: true`.
+    /// Best for formatters and IDE round-trip tools. (Current default behaviour.)
+    Attach,
+}
+```
+
+### Benchmark impact
+
+This does not move the existing `vs_serde_json` benchmark (JSON has no whitespace in
+the bench fixtures). To measure the gain, add a `lex_source_code_with_comments`
+benchmark that feeds a realistic indented source file. Expected: ~10% reduction in
+`Vec<Token>` size and proportional reduction in parse-engine work for typical
+prose-style source code.
+
+### Dependency
+
+None. This change is independent of B4 and can be implemented first. However, the
+full benefit is compounded when combined with B4 (Cow tokens), since the tokens that
+are not dropped become cheaper to construct.
+
+---
+
+## E2 · Full `Vec<Token>` materialization — parser cannot consume tokens lazily
+
+**Layer**: `rb_tokenizer` / `rb_parser`
+**File**: `crates/rb_tokenizer/src/tokenizers/tokenizer.rs`, `crates/rb_parser/src/lib.rs`
+**Expected impact**: 10–20% additional throughput improvement on top of B4+B5 for large files; significant memory reduction.
+
+### Root Cause
+
+`Tokenizer::tokenize(input: &str) -> Vec<Token>` always allocates and fills the
+complete token vector before returning. `CompiledParser::parse_tree` receives
+`&[Token]` and holds a cursor index into it.
+
+For a 10 MB source file this means the entire token array must be heap-allocated and
+populated before the first grammar rule fires. Peak memory usage is approximately
+`n_tokens * size_of::<Token>()` (currently ~96 bytes per token = ~100 MB for 1 million
+tokens) in addition to the source string itself.
+
+A PEG parser needs lookahead to backtrack, but in practice most grammars only look
+ahead 1–3 tokens at any committed parse point. The entire token array is kept alive to
+support the worst-case backtrack depth even though committed tokens are never
+re-examined.
+
+### Fix
+
+Define a `TokenSource` pull trait and a `BufferedTokenSource` adapter:
+
+```rust
+/// Pull-based token source consumed by the parse engine.
+pub trait TokenSource {
+    /// Returns the token at `offset` positions ahead of the current position.
+    /// `offset = 0` is the current token.
+    fn peek(&self, offset: usize) -> Option<&Token>;
+    /// Advance past the current token.
+    fn advance(&mut self);
+    /// Current byte position (for diagnostics).
+    fn current_byte_offset(&self) -> usize;
+}
+
+/// Wraps any `Iterator<Item = Token>` and maintains a sliding lookahead window.
+pub struct BufferedTokenSource<I: Iterator<Item = Token>> {
+    iter:   I,
+    buffer: std::collections::VecDeque<Token>,
+}
+```
+
+`ParseContext` is migrated from `(tokens: &[Token], pos: usize)` to
+`token_source: &mut dyn TokenSource`. Once `eval()` commits past a token (i.e. no
+live backtrack frame can reach it), `BufferedTokenSource` discards it from the
+`VecDeque`, keeping memory proportional to the current backtrack window rather than
+the file size.
+
+The existing `parse_tree(&[Token])` API is preserved as a convenience wrapper that
+constructs a `SliceTokenSource`:
+
+```rust
+pub struct SliceTokenSource<'a> {
+    tokens: &'a [Token],
+    pos: usize,
+}
+impl<'a> TokenSource for SliceTokenSource<'a> {
+    fn peek(&self, offset: usize) -> Option<&Token> { self.tokens.get(self.pos + offset) }
+    fn advance(&mut self) { self.pos += 1; }
+    fn current_byte_offset(&self) -> usize { /* from span */ 0 }
+}
+```
+
+This makes the API change non-breaking for existing callers while enabling streaming
+use for new ones.
+
+### Bounded backtrack window
+
+Once C15 (FIRST set analysis) is implemented, the maximum backtrack depth per grammar
+position becomes statically known. `BufferedTokenSource` can expose a
+`set_window_limit(n: usize)` method that panics (in debug) if the parse engine tries
+to peek beyond the declared limit, catching grammar correctness violations early.
+
+### Benchmark impact
+
+The `vs_serde_json` gap will narrow further after B4+B5. The streaming pipeline
+eliminates the `Vec<Token>` peak-allocation spike visible in memory profiles and
+reduces startup latency for large files (first token emitted to grammar before last
+token is scanned).
+
+### Dependencies
+
+**Must be implemented after B4** — `Token<'src>` with `Cow<'src, str>` introduces a
+lifetime that threads through `TokenSource` and the iterator adapter. Implementing
+streaming before B4 would require doing the lifetime migration twice.

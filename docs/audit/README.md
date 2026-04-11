@@ -27,6 +27,7 @@ priority so work can be tracked and sequenced.
 | [P2 — Missing Fundamental API](p2-missing-api.md) | Grammar primitives and parser features without which grammar authors are blocked on real languages | Required before 1.0 |
 | [P3 — Architecture & Design](p3-architecture.md) | Structural problems that will compound as the codebase grows | Fix before API stabilization |
 | [P4–P5 — Ecosystem & Polish](p4-p5-ecosystem-polish.md) | Missing ecosystem features, ergonomics, and documentation | Required before production release |
+| [Implementation Plan](implementation-plan.md) | Sequenced milestones, sprint backlog, and dependency graph | Living planning document |
 
 ---
 
@@ -83,6 +84,13 @@ priority so work can be tracked and sequenced.
 | D8 | workspace | No fuzz testing infrastructure | P4 |
 | D9 | workspace | `#![deny(missing_docs)]` not set — public API incompletely documented | P5 |
 | D10 | workspace | No criterion baseline tracking in CI — performance regresses silently | P4 |
+| E1 | rb_tokenizer | Trivia token types not configurable — trivia always flows into the parser | P1 |
+| E2 | rb_tokenizer / rb_parser | Full `Vec<Token>` materialization — parser cannot consume tokens lazily | P1 |
+| E3 | visitor | No kind-dispatched visitor — grammar authors repeat `if node.kind == …` everywhere | P4 |
+| E4 | visitor | No cursor / navigation API — subtree traversal requires a full tree walk | P4 |
+| E5 | visitor | No path-aware visitor — context-sensitive analysis requires manual ancestor tracking | P4 |
+| E6 | visitor | No event-streaming visitor — every analysis pass forces full CST materialization | P4 |
+| E7 | visitor | No mutable / transform visitor — CST rewrites require manual tree reconstruction | P4 |
 
 ---
 
@@ -113,6 +121,36 @@ architecture is incomplete (A6, A7). Diagnostics are the user's most visible int
 with parse failures — these affect the framework's quality perception more than any
 benchmark number. See [P0](p0-correctness-bugs.md).
 
+### Theme 5 — Trivia, Streaming, and Pipeline Architecture
+
+Three issues form a coherent pipeline-level improvement track: E1 (trivia filtering)
+lets the tokenizer discard irrelevant tokens before they touch the heap; E2 (streaming
+`TokenSource`) eliminates full-file token materialization so the parser and tokenizer
+run concurrently rather than sequentially; B11 (tokenize_from) closes the incremental
+gap at the tokenizer level. The dependency chain is strict: **E1 is independent → B4
+(Cow token) must land first → then E2 wires in the streaming interface → then B11
+adds the offset restart API.** Taken together they represent the path from 2.3 MB/s
+to ≥ 20 MB/s for realistic source-code inputs. See [P1](p1-performance.md).
+
+### Theme 6 — Visitor Ecosystem and Code Consumption Ergonomics
+
+The `visitor` crate is currently a 7-line re-export shim. Five complementary visitor
+patterns (E3–E7) address the full spectrum of downstream consumers:
+
+- **E3 Kind-dispatch** — removes boilerplate `match node.kind` in every visitor;
+  prerequisite for any grammar tooling beyond toy examples.
+- **E4 Cursor API** — enables IDE-style point navigation without full-tree walks;
+  the foundation for C19 (AST lowering) and LSP cursor features.
+- **E5 Path-aware** — supplies the ancestor chain to every hook; enables context-
+  sensitive analysis without manually maintained stacks.
+- **E6 Event-streaming** — exposes the existing `ParseStrategy` infrastructure as
+  a user-facing API, enabling zero-CST single-pass analysis at parse speed.
+- **E7 Transform** — enables in-place CST rewrites for desugaring and macro
+  expansion; depends on C8 (flat arena) for an efficient implementation.
+
+E3, E4, E5, and E6 are independently implementable with no P1 or P2 blockers.
+E7 should be stubbed (trait + enum) now and fully implemented after C8.
+
 ---
 
 ## Production Language & IDE Language Server Readiness
@@ -126,8 +164,8 @@ This section answers: **"what do I need to fix before I can build X?"**
 | Config / DSL / TOML-like grammars | ✅ **Ready now** | None critical |
 | Full programming language (JSON-like complexity) | ✅ **Ready now** | — |
 | Full programming language (JS / Python / Ruby complexity) | ❌ **Not ready** | C10, C13, B4, B5 |
-| Compiler front-end (batch, no IDE) | ⚠️ Close — fix P1+P2 first | C10, C11, C13, C14, B4, B5, B7 |
-| IDE language server (LSP) | ❌ **Not ready** | All P1+P2 + C12, B11, D5, D6, C19, and LSP wire protocol (absent entirely) |
+| Compiler front-end (batch, no IDE) | ⚠️ Close — fix P1+P2 first | C10, C11, C13, C14, B4, B5, B7, E1 |
+| IDE language server (LSP) | ❌ **Not ready** | All P1+P2 + C12, B11, D5, D6, C19, E2, E4, E6, and LSP wire protocol (absent entirely) |
 
 ---
 
@@ -156,6 +194,8 @@ a language server needs ≥ 50 MB/s. The gap is ~10–22×. Root causes, in prio
 | **B4** — `String` per token (heap alloc per match) | [p1-performance.md](p1-performance.md) | 40–60% reduction alone |
 | **B5** — O(bytes/token) line/col tracking | [p1-performance.md](p1-performance.md) | 25–35% after B4 |
 | **B7** — O(scanners) dispatch per byte position | [p1-performance.md](p1-performance.md) | 15–30% in grammars with > 8 scanners |
+| **E1** — trivia tokens flow through full pipeline | [p1-performance.md](p1-performance.md) | 5–15% on source-code inputs; enables `TriviaMode::Drop` |
+| **E2** — full `Vec<Token>` materialization before parse | [p1-performance.md](p1-performance.md) | 10–20% additional on top of B4+B5; eliminates peak token-array allocation |
 
 **Estimated effort**: 3–5 weeks. B4 is a breaking API change (adds lifetime to `Token`).
 
@@ -173,6 +213,9 @@ Even after P1+P2, an LSP requires infrastructure that does not yet exist:
 | **D6** — `Tokenizer` not `Clone` | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Cannot tokenize multiple files in parallel on a thread pool |
 | **C19** — no `AstLoweringStrategy` impl | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | LSP needs a typed AST for hover/completion/rename; manually lowering CST per project is not viable |
 | **C18** — no `CstToken::text()` | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Every LSP feature (hover, go-to-def, rename) duplicates manual span arithmetic |
+| **E2** — no streaming `TokenSource` | [p1-performance.md](p1-performance.md) | File-at-a-time tokenization; streaming is required for responsive large-file editing |
+| **E4** — no cursor / navigation API | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | IDE cursor-to-node mapping, hover, and go-to-definition are impossible without O(1) parent navigation |
+| **E6** — no event-streaming visitor | [p4-p5-ecosystem-polish.md](p4-p5-ecosystem-polish.md) | Syntax highlighting and symbol indexing must materialize a full CST; streaming is required for < 16 ms response |
 | *(absent)* — **LSP wire protocol** | — | Zero `textDocument/hover`, `textDocument/completion`, etc. Requires integrating a crate like `tower-lsp`; this layer is entirely absent |
 
 **Estimated effort**: 4–8 weeks for C12 alone (incremental re-parse is the hardest
@@ -186,11 +229,13 @@ together: ~2–3 weeks. LSP wire layer: ~6–12 weeks.
 | Layer | Issues | Rough effort |
 |---|---|---|
 | Correct grammar expressiveness | C10, C11, C13, C14 | 2–4 weeks |
-| Performance (tolerable latency) | B4, B5, B7 | 3–5 weeks |
+| Performance (tolerable latency) | B4, B5, B7, E1 | 3–5 weeks |
+| Streaming pipeline | E2 (after B4) | 1–2 weeks |
+| Visitor ecosystem | E3, E4, E5, E6 (independent); E7 after C8 | 2–3 weeks |
 | Incremental re-parse foundation | C12, B11 | 4–8 weeks |
 | CST-to-AST + serde + thread safety | C19, D5, D6, C18 | 2–3 weeks |
 | LSP wire protocol integration | `tower-lsp` wrapper, workspace indexer | 6–12 weeks |
-| **Total** | | **~17–32 weeks** |
+| **Total** | | **~20–37 weeks** |
 
 **Recommended sequencing**: Fix P1+P2 first → ship a formatter/linter/compiler front-end
 as a milestone → then tackle C12 (incremental re-parse) as its own dedicated milestone
