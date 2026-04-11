@@ -80,7 +80,7 @@ unsafe impl Sync for CompiledParser {}
 trait ParseFn: Send + Sync {
     fn run(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -91,7 +91,7 @@ trait ParseFn: Send + Sync {
     /// Build a `CstTree` directly, without wrapping in a `dyn FnMut` callback.
     fn run_building(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -101,7 +101,7 @@ trait ParseFn: Send + Sync {
     /// Collect all `ParseEvent`s directly, without wrapping in a `dyn FnMut` callback.
     fn run_collecting(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -117,7 +117,7 @@ struct GrammarParseFn<R: RuleId> {
 impl<R: RuleId> ParseFn for GrammarParseFn<R> {
     fn run(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -141,7 +141,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
 
     fn run_building(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -157,7 +157,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
 
     fn run_collecting(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         profile: &ResolvedProfile,
         recovery: &RecoveryConfig,
@@ -190,14 +190,14 @@ impl CompiledParser {
     /// Parse a token stream and return a [`CstTree`].
     ///
     /// Uses `SourceId(0)`. For multi-file workspaces use [`Self::parse_tree_with_source`].
-    pub fn parse_tree(&self, tokens: &[Token], ctx: &mut DiagnosticsContext) -> CstTree {
+    pub fn parse_tree(&self, tokens: &[Token<'_>], ctx: &mut DiagnosticsContext) -> CstTree {
         self.parse_tree_with_source(tokens, ctx, SourceId(0))
     }
 
     /// Parse a token stream and return a [`CstTree`], tagging all spans with `source_id`.
     pub fn parse_tree_with_source(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         source_id: SourceId,
     ) -> CstTree {
@@ -207,14 +207,14 @@ impl CompiledParser {
     /// Parse a token stream and return a flat `Vec<ParseEvent>`.
     ///
     /// Uses `SourceId(0)`. For multi-file workspaces use [`Self::parse_events_with_source`].
-    pub fn parse_events(&self, tokens: &[Token], ctx: &mut DiagnosticsContext) -> Vec<ParseEvent> {
+    pub fn parse_events(&self, tokens: &[Token<'_>], ctx: &mut DiagnosticsContext) -> Vec<ParseEvent> {
         self.parse_events_with_source(tokens, ctx, SourceId(0))
     }
 
     /// Parse a token stream and return a flat `Vec<ParseEvent>`, tagging all spans with `source_id`.
     pub fn parse_events_with_source(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         source_id: SourceId,
     ) -> Vec<ParseEvent> {
@@ -228,7 +228,7 @@ impl CompiledParser {
     /// Parse using a custom [`ParseStrategy`].
     pub fn parse_with_strategy<S: ParseStrategy>(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         strategy: S,
     ) -> S::Output {
@@ -238,7 +238,7 @@ impl CompiledParser {
     /// Parse using a custom [`ParseStrategy`], tagging all spans with `source_id`.
     pub fn parse_with_strategy_and_source<S: ParseStrategy>(
         &self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
         mut strategy: S,
         source_id: SourceId,
@@ -264,7 +264,7 @@ pub struct IncrementalParser<'compiled> {
 impl<'compiled> IncrementalParser<'compiled> {
     pub fn initial_parse(
         &mut self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         ctx: &mut DiagnosticsContext,
     ) -> &CstTree {
         let tree = self.compiled.parse_tree(tokens, ctx);
@@ -280,7 +280,7 @@ impl<'compiled> IncrementalParser<'compiled> {
     /// to Phase 2. Callers may pass `&[]` if they do not have edit metadata.
     pub fn reparse(
         &mut self,
-        tokens: &[Token],
+        tokens: &[Token<'_>],
         _edits: &[TextEdit],
         ctx: &mut DiagnosticsContext,
     ) -> &CstTree {

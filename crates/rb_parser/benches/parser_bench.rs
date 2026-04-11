@@ -13,16 +13,17 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_parser::prelude::*;
 use rb_tokenizer::{tokens::{SourceSpan, Token}, Tokenizer};
+use std::borrow::Cow;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Token helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn t(ty: &'static str, val: &'static str) -> Token {
+fn t(ty: &'static str, val: &'static str) -> Token<'static> {
     Token {
         token_type: ty,
         token_sub_type: None,
-        value: val.to_string(),
+        value: Cow::Borrowed(val),
         span: SourceSpan::UNKNOWN,
     }
 }
@@ -76,7 +77,7 @@ fn build_json_parser() -> rb_parser::CompiledParser {
 }
 
 /// `[1, 2, 3]`
-fn json_tokens_small() -> Vec<Token> {
+fn json_tokens_small() -> Vec<Token<'static>> {
     vec![
         t("LBRACKET", "["),
         t("NUMBER", "1"), t("COMMA", ","),
@@ -87,7 +88,7 @@ fn json_tokens_small() -> Vec<Token> {
 }
 
 /// `{"k0": 0, "k1": 1, …, "k49": 49}`
-fn json_tokens_medium() -> Vec<Token> {
+fn json_tokens_medium() -> Vec<Token<'static>> {
     let mut v = vec![t("LBRACE", "{")];
     for i in 0usize..50 {
         if i > 0 { v.push(t("COMMA", ",")); }
@@ -100,7 +101,7 @@ fn json_tokens_medium() -> Vec<Token> {
 }
 
 /// Nested array 3 levels deep, 100 leaf numbers each
-fn json_tokens_large() -> Vec<Token> {
+fn json_tokens_large() -> Vec<Token<'static>> {
     // [ [ [ 0, 1, …, 99 ], [ 0..99 ] ], [ [ … ], [ … ] ] ]
     let leaf_array = || {
         let mut v = vec![t("LBRACKET", "[")];
@@ -150,8 +151,8 @@ fn build_expr_parser() -> rb_parser::CompiledParser {
 }
 
 /// `1 + 2 * 3 - 4 / 5`  repeated `n` times joined with `+`
-fn expr_tokens_chain(n: usize) -> Vec<Token> {
-    let unit: Vec<Token> = vec![
+fn expr_tokens_chain(n: usize) -> Vec<Token<'static>> {
+    let unit: Vec<Token<'static>> = vec![
         t("NUM", "1"), t("+", "+"), t("NUM", "2"), t("*", "*"),
         t("NUM", "3"), t("-", "-"), t("NUM", "4"), t("/", "/"), t("NUM", "5"),
     ];
@@ -317,7 +318,7 @@ fn bench_deeply_nested(c: &mut Criterion) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Build `[0, 1, 2, …, n-1]` as a JSON token stream.
-fn json_flat_array(n: usize) -> Vec<Token> {
+fn json_flat_array(n: usize) -> Vec<Token<'static>> {
     let mut v = Vec::with_capacity(1 + n * 2 + 1);
     v.push(t("LBRACKET", "["));
     for i in 0..n {

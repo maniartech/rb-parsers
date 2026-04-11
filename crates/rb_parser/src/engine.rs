@@ -101,7 +101,7 @@ pub enum RecoveryAction {
 /// The mutable parse state threaded through every combinator call.
 /// `!Send` — holds `&mut DiagnosticsContext`.
 pub struct ParseContext<'src> {
-    tokens: &'src [Token],
+    tokens: &'src [Token<'src>],
     pub ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
     pub profile: &'src crate::profiles::ResolvedProfile,
     pub(crate) source_id: rb_common::spans::SourceId,
@@ -112,7 +112,7 @@ pub struct ParseContext<'src> {
 
 impl<'src> ParseContext<'src> {
     pub fn new(
-        tokens: &'src [Token],
+        tokens: &'src [Token<'src>],
         ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
         profile: &'src crate::profiles::ResolvedProfile,
         source_id: rb_common::spans::SourceId,
@@ -128,15 +128,15 @@ impl<'src> ParseContext<'src> {
         }
     }
 
-    pub fn peek(&self) -> Option<&Token> {
+    pub fn peek(&self) -> Option<&Token<'src>> {
         self.tokens.get(self.cursor)
     }
 
-    pub fn peek_ahead(&self, offset: usize) -> Option<&Token> {
+    pub fn peek_ahead(&self, offset: usize) -> Option<&Token<'src>> {
         self.tokens.get(self.cursor + offset)
     }
 
-    pub fn advance(&mut self) -> Option<&Token> {
+    pub fn advance(&mut self) -> Option<&Token<'src>> {
         let tok = self.tokens.get(self.cursor);
         if tok.is_some() { self.cursor += 1; }
         tok
@@ -188,5 +188,5 @@ impl<'src> ParseContext<'src> {
         }
     }
 
-    pub fn tokens(&self) -> &[Token] { self.tokens }
+    pub fn tokens(&self) -> &[Token<'src>] { self.tokens }
 }

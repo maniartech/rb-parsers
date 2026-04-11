@@ -5,18 +5,19 @@
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_parser::prelude::*;
 use rb_tokenizer::tokens::{Token, SourceSpan};
+use std::borrow::Cow;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-fn tok_make(ty: &'static str, val: &'static str) -> Token {
-    Token { token_type: ty, token_sub_type: None, value: val.to_string(), span: SourceSpan::UNKNOWN }
+fn tok_make(ty: &'static str, val: &'static str) -> Token<'static> {
+    Token { token_type: ty, token_sub_type: None, value: Cow::Borrowed(val), span: SourceSpan::UNKNOWN }
 }
 
-fn tok_sub_make(ty: &'static str, sub: &'static str, val: &'static str) -> Token {
+fn tok_sub_make(ty: &'static str, sub: &'static str, val: &'static str) -> Token<'static> {
     Token {
         token_type: ty,
         token_sub_type: Some(sub),
-        value: val.to_string(),
+        value: Cow::Borrowed(val),
         span: SourceSpan::UNKNOWN,
     }
 }
