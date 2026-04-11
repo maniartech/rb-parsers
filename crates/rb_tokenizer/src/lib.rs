@@ -37,13 +37,13 @@ mod tests {
             tokens::Token {
                 token_type: "Number",
                 token_sub_type: None,
-                value: "123".to_string(),
+                value: std::borrow::Cow::Borrowed("123"),
                 span: tokens::SourceSpan::UNKNOWN,
             },
             tokens::Token {
                 token_type: "Operator",
                 token_sub_type: Some("Plus"),
-                value: "+".to_string(),
+                value: std::borrow::Cow::Borrowed("+"),
                 span: tokens::SourceSpan::UNKNOWN,
             },
         ];

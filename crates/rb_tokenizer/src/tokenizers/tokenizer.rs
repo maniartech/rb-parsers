@@ -8,6 +8,7 @@ use crate::scanners::whitespace_scanner::WhitespaceScanner;
 use crate::scanners::{self, BlockScanner, EolScanner, RegexScanner, Scanner, ScannerType, SymbolScanner};
 use crate::tokens::{Token, TokenizationError};
 use rb_common::spans::{SourceId, SourcePosition, SourceSpan};
+use std::borrow::Cow;
 use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
@@ -44,25 +45,17 @@ impl Default for Tokenizer {
 }
 
 impl Tokenizer {
-    fn advance_cursor(
-        chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
-        consumed_len: usize,
-        current_line: &mut usize,
-        current_column: &mut usize,
-    ) {
-        let mut consumed_bytes = 0;
-
-        while consumed_bytes < consumed_len {
-            if let Some((_, ch)) = chars.next() {
-                consumed_bytes += ch.len_utf8();
-                if ch == '\n' {
-                    *current_line += 1;
-                    *current_column = 1;
-                } else {
-                    *current_column += 1;
-                }
-            } else {
-                break;
+    /// Advance line/column counters by scanning the bytes of a consumed token slice.
+    /// Counts Unicode code points (non-continuation bytes) for column tracking.
+    #[inline]
+    fn advance_pos(slice: &[u8], current_line: &mut usize, current_column: &mut usize) {
+        for &b in slice {
+            if b == b'\n' {
+                *current_line += 1;
+                *current_column = 1;
+            } else if b & 0xC0 != 0x80 {
+                // Non-continuation byte = start of a Unicode code point.
+                *current_column += 1;
             }
         }
     }
@@ -208,7 +201,7 @@ impl Tokenizer {
     /// Write to `ctx.mode` inside the closure to switch the tokenizer's lexer mode.
     pub fn add_contextual_closure(
         &mut self,
-        cb: impl Fn(&str, &mut ScanContext) -> Result<Option<Token>, TokenizationError>
+        cb: impl for<'i> Fn(&'i str, &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError>
             + Send
             + Sync
             + 'static,
@@ -368,7 +361,7 @@ impl Tokenizer {
     }
 
     // Enhanced tokenize method with improved whitespace handling
-    pub fn tokenize(&self, input: &str) -> Result<Vec<Token>, Vec<TokenizationError>> {
+    pub fn tokenize<'i>(&self, input: &'i str) -> Result<Vec<Token<'i>>, Vec<TokenizationError>> {
         // Guard: contextual scanners are invisible to this path. Catch the mistake early.
         #[cfg(debug_assertions)]
         if self.has_contextual_scanners() {
@@ -378,39 +371,43 @@ impl Tokenizer {
             );
         }
 
-        let mut tokens = Vec::new();
+        let mut tokens = Vec::with_capacity(input.len() / 6);
         let mut errors = Vec::new();
 
-        let mut current_line = 1;
-        let mut current_column = 1;
-        let mut chars = input.char_indices().peekable();
+        let mut current_line: usize = 1;
+        let mut current_column: usize = 1;
+        let mut pos: usize = 0;
 
-        while let Some((start, next_char)) = chars.peek().copied() {
+        while pos < input.len() {
+            let current_input = &input[pos..];
             let mut matched = false;
-            let current_input = &input[start..];
 
-            // Try to match complex scanners first (like strings which can contain whitespace)
             for scanner in &self.scanners {
                 match scanner.scan_with_context(current_input) {
                     Ok(Some(scan_match)) => {
                         let token_len = scan_match.consumed_len;
                         let partial = scan_match.token;
 
-                        let start_byte = start;
+                        let start_byte = pos;
                         let start_pos = SourcePosition {
                             byte_offset: start_byte,
                             line: current_line - 1,
                             column: current_column - 1,
                         };
 
-                        Self::advance_cursor(&mut chars, token_len, &mut current_line, &mut current_column);
+                        Self::advance_pos(
+                            input[pos..pos + token_len].as_bytes(),
+                            &mut current_line,
+                            &mut current_column,
+                        );
+                        pos += token_len;
 
                         let span = if self.config.track_token_positions {
                             SourceSpan {
                                 source_id: self.source_id,
                                 start: start_pos,
                                 end: SourcePosition {
-                                    byte_offset: start_byte + token_len,
+                                    byte_offset: pos,
                                     line: current_line - 1,
                                     column: current_column - 1,
                                 },
@@ -433,8 +430,8 @@ impl Tokenizer {
                     Err(e) => {
                         let err_span = SourceSpan {
                             source_id: self.source_id,
-                            start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
-                            end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                            start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                            end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
                         };
                         errors.push(e.at(err_span));
 
@@ -443,9 +440,11 @@ impl Tokenizer {
                             return Err(errors);
                         }
 
-                        // If we encounter an error but want to continue, we need to skip this character
+                        // If we encounter an error but want to continue, skip this character.
                         if self.config.continue_on_error {
-                            chars.next();
+                            // Skip the current character without decoding it as a char.
+                            let b0 = current_input.as_bytes()[0];
+                            pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                             current_column += 1;
                             matched = true; // Mark as matched so we don't double-count this error
                             break;
@@ -458,31 +457,33 @@ impl Tokenizer {
             }
 
             if !matched {
-                if next_char.is_whitespace() {
+                let b0 = current_input.as_bytes()[0]; // safe: pos < input.len()
+                // Fast ASCII whitespace check; only decode the char for non-ASCII code points.
+                let (is_ws, decoded_char) = if b0.is_ascii() {
+                    (matches!(b0, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C), None)
+                } else {
+                    let ch = current_input.chars().next().unwrap();
+                    (ch.is_whitespace(), Some(ch))
+                };
+                if is_ws {
                     if self.config.tokenize_whitespace {
-                        let ws_start_byte = start;
+                        let ws_start_byte = pos;
                         let ws_start_line = current_line;
                         let ws_start_col = current_column;
-                        let mut whitespace = String::new();
                         let mut has_newline = false;
 
-                        // Consume whitespace characters one by one
-                        while let Some((_, ch)) = chars.peek() {
-                            if !ch.is_whitespace() {
-                                break;
-                            }
-
-                            let current_char = *ch;
-                            whitespace.push(current_char);
-                            has_newline |= current_char == '\n';
-
-                            chars.next();
-
-                            if current_char == '\n' {
-                                current_line += 1;
-                                current_column = 1;
-                            } else {
-                                current_column += 1;
+                        while pos < input.len() {
+                            match input.as_bytes()[pos] {
+                                b'\n' => { has_newline = true; current_line += 1; current_column = 1; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                0x80..=0xFF => {
+                                    let ch = input[pos..].chars().next().unwrap();
+                                    if !ch.is_whitespace() { break; }
+                                    if ch == '\n' { has_newline = true; current_line += 1; current_column = 1; }
+                                    else { current_column += 1; }
+                                    pos += ch.len_utf8();
+                                }
+                                _ => break,
                             }
                         }
 
@@ -495,7 +496,7 @@ impl Tokenizer {
                                     column: ws_start_col - 1,
                                 },
                                 end: SourcePosition {
-                                    byte_offset: ws_start_byte + whitespace.len(),
+                                    byte_offset: pos,
                                     line: current_line - 1,
                                     column: current_column - 1,
                                 },
@@ -507,32 +508,32 @@ impl Tokenizer {
                         tokens.push(Token {
                             token_type: "Whitespace",
                             token_sub_type: if has_newline { Some("Newline") } else { None },
-                            value: whitespace,
+                            value: Cow::Borrowed(&input[ws_start_byte..pos]),
                             span: ws_span,
                         });
                     } else {
-                        // Skip whitespace when not tokenizing it
-                        while let Some((_, ch)) = chars.peek() {
-                            if !ch.is_whitespace() {
-                                break;
-                            }
-
-                            let current_char = *ch;
-                            chars.next();
-
-                            if current_char == '\n' {
-                                current_line += 1;
-                                current_column = 1;
-                            } else {
-                                current_column += 1;
+                        // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
+                        while pos < input.len() {
+                            match input.as_bytes()[pos] {
+                                b'\n' => { current_line += 1; current_column = 1; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                0x80..=0xFF => {
+                                    let ch = input[pos..].chars().next().unwrap();
+                                    if !ch.is_whitespace() { break; }
+                                    if ch == '\n' { current_line += 1; current_column = 1; }
+                                    else { current_column += 1; }
+                                    pos += ch.len_utf8();
+                                }
+                                _ => break,
                             }
                         }
                     }
                 } else {
+                    let next_char = decoded_char.unwrap_or(b0 as char);
                     let err_span = SourceSpan {
                         source_id: self.source_id,
-                        start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
-                        end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                        end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
                     };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
@@ -541,7 +542,7 @@ impl Tokenizer {
                     errors.push(error);
 
                     if self.config.continue_on_error {
-                        chars.next();
+                        pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                         current_column += 1;
                     } else {
                         break;
@@ -574,21 +575,21 @@ impl Tokenizer {
     ///
     /// Non-contextual scanners (regex, symbol, block, etc.) run unaffected — they ignore
     /// the context and are tried in registration order alongside contextual ones.
-    pub fn tokenize_contextual(
+    pub fn tokenize_contextual<'i>(
         &self,
-        input: &str,
-    ) -> Result<Vec<Token>, Vec<TokenizationError>> {
-        let mut tokens = Vec::new();
+        input: &'i str,
+    ) -> Result<Vec<Token<'i>>, Vec<TokenizationError>> {
+        let mut tokens = Vec::with_capacity(input.len() / 6);
         let mut errors = Vec::new();
         let mut ctx = ScanContext::new();
 
         let mut current_line = 1usize;
         let mut current_column = 1usize;
-        let mut chars = input.char_indices().peekable();
+        let mut pos: usize = 0;
 
-        while let Some((start, next_char)) = chars.peek().copied() {
+        while pos < input.len() {
+            let current_input = &input[pos..];
             let mut matched = false;
-            let current_input = &input[start..];
 
             ctx.line = current_line;
             ctx.column = current_column;
@@ -599,21 +600,26 @@ impl Tokenizer {
                         let token_len = scan_match.consumed_len;
                         let partial = scan_match.token;
 
-                        let start_byte = start;
+                        let start_byte = pos;
                         let start_pos = SourcePosition {
                             byte_offset: start_byte,
                             line: current_line - 1,
                             column: current_column - 1,
                         };
 
-                        Self::advance_cursor(&mut chars, token_len, &mut current_line, &mut current_column);
+                        Self::advance_pos(
+                            input[pos..pos + token_len].as_bytes(),
+                            &mut current_line,
+                            &mut current_column,
+                        );
+                        pos += token_len;
 
                         let span = if self.config.track_token_positions {
                             SourceSpan {
                                 source_id: self.source_id,
                                 start: start_pos,
                                 end: SourcePosition {
-                                    byte_offset: start_byte + token_len,
+                                    byte_offset: pos,
                                     line: current_line - 1,
                                     column: current_column - 1,
                                 },
@@ -639,8 +645,8 @@ impl Tokenizer {
                     Err(e) => {
                         let err_span = SourceSpan {
                             source_id: self.source_id,
-                            start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
-                            end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                            start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                            end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
                         };
                         errors.push(e.at(err_span));
                         if errors.len() >= self.config.error_tolerance_limit {
@@ -648,7 +654,8 @@ impl Tokenizer {
                             return Err(errors);
                         }
                         if self.config.continue_on_error {
-                            chars.next();
+                            let b0 = current_input.as_bytes()[0];
+                            pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                             current_column += 1;
                             matched = true;
                             break;
@@ -661,24 +668,32 @@ impl Tokenizer {
             }
 
             if !matched {
-                if next_char.is_whitespace() {
+                let b0 = current_input.as_bytes()[0]; // safe: pos < input.len()
+                let (is_ws, decoded_char) = if b0.is_ascii() {
+                    (matches!(b0, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C), None)
+                } else {
+                    let ch = current_input.chars().next().unwrap();
+                    (ch.is_whitespace(), Some(ch))
+                };
+                if is_ws {
                     if self.config.tokenize_whitespace {
+                        let ws_start_byte = pos;
                         let start_line = current_line;
                         let start_column = current_column;
-                        let mut whitespace = String::new();
                         let mut has_newline = false;
 
-                        while let Some((_, ch)) = chars.peek() {
-                            if !ch.is_whitespace() { break; }
-                            let current_char = *ch;
-                            whitespace.push(current_char);
-                            has_newline |= current_char == '\n';
-                            chars.next();
-                            if current_char == '\n' {
-                                current_line += 1;
-                                current_column = 1;
-                            } else {
-                                current_column += 1;
+                        while pos < input.len() {
+                            match input.as_bytes()[pos] {
+                                b'\n' => { has_newline = true; current_line += 1; current_column = 1; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                0x80..=0xFF => {
+                                    let ch = input[pos..].chars().next().unwrap();
+                                    if !ch.is_whitespace() { break; }
+                                    if ch == '\n' { has_newline = true; current_line += 1; current_column = 1; }
+                                    else { current_column += 1; }
+                                    pos += ch.len_utf8();
+                                }
+                                _ => break,
                             }
                         }
 
@@ -686,12 +701,12 @@ impl Tokenizer {
                             SourceSpan {
                                 source_id: self.source_id,
                                 start: SourcePosition {
-                                    byte_offset: start,
+                                    byte_offset: ws_start_byte,
                                     line: start_line - 1,
                                     column: start_column - 1,
                                 },
                                 end: SourcePosition {
-                                    byte_offset: start + whitespace.len(),
+                                    byte_offset: pos,
                                     line: current_line - 1,
                                     column: current_column - 1,
                                 },
@@ -703,29 +718,34 @@ impl Tokenizer {
                         let ws_token = Token {
                             token_type: "Whitespace",
                             token_sub_type: if has_newline { Some("Newline") } else { None },
-                            value: whitespace,
+                            value: Cow::Borrowed(&input[ws_start_byte..pos]),
                             span: ws_span,
                         };
                         ctx.prev_token_kind = Some(ws_token.token_type);
                         tokens.push(ws_token);
                     } else {
-                        while let Some((_, ch)) = chars.peek() {
-                            if !ch.is_whitespace() { break; }
-                            let current_char = *ch;
-                            chars.next();
-                            if current_char == '\n' {
-                                current_line += 1;
-                                current_column = 1;
-                            } else {
-                                current_column += 1;
+                        // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
+                        while pos < input.len() {
+                            match input.as_bytes()[pos] {
+                                b'\n' => { current_line += 1; current_column = 1; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                0x80..=0xFF => {
+                                    let ch = input[pos..].chars().next().unwrap();
+                                    if !ch.is_whitespace() { break; }
+                                    if ch == '\n' { current_line += 1; current_column = 1; }
+                                    else { current_column += 1; }
+                                    pos += ch.len_utf8();
+                                }
+                                _ => break,
                             }
                         }
                     }
                 } else {
+                    let next_char = decoded_char.unwrap_or(b0 as char);
                     let err_span = SourceSpan {
                         source_id: self.source_id,
-                        start: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
-                        end: SourcePosition { byte_offset: start, line: current_line - 1, column: current_column - 1 },
+                        start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                        end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
                     };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
@@ -733,7 +753,7 @@ impl Tokenizer {
                     ).at(err_span);
                     errors.push(error);
                     if self.config.continue_on_error {
-                        chars.next();
+                        pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                         current_column += 1;
                     } else {
                         break;
