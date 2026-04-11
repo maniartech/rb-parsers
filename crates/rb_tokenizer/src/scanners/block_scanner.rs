@@ -2,6 +2,7 @@ use super::scanner::Scanner;
 use super::scanner::ScanMatch;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
 use regex::Regex;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Types of escape rules supported by the scanner
@@ -239,6 +240,46 @@ impl BlockScanner {
             return Ok(None);
         }
 
+        // Fast path: single-byte ASCII delimiters with no custom escape rules.
+        // Scanning bytes avoids per-character UTF-8 decode overhead, which is
+        // significant for ASCII-heavy content (JSON strings, line comments, etc.).
+        if self.escape_rules.is_empty()
+            && self.start_delimiter.len() == 1
+            && self.end_delimiter.len() == 1
+        {
+            let start_b = self.start_delimiter.as_bytes()[0];
+            let end_b   = self.end_delimiter.as_bytes()[0];
+            if start_b < 0x80 && end_b < 0x80 {
+                let bytes = input.as_bytes();
+                let mut pos: usize = 1; // step past the start delimiter
+                let mut depth: i32 = 1;
+                while pos < bytes.len() {
+                    let b = bytes[pos];
+                    // Default backslash escape: skip the escaped byte (raw_mode: false only).
+                    if !self.raw_mode && b == b'\\' && pos + 1 < bytes.len() {
+                        pos += 2;
+                        continue;
+                    }
+                    if b == end_b {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Ok(Some(pos + 1));
+                        }
+                        pos += 1;
+                    } else if self.allow_nesting && b == start_b {
+                        depth += 1;
+                        pos += 1;
+                    } else {
+                        pos += 1;
+                    }
+                }
+                return Err(TokenizationError::UnmatchedBlockDelimiter(
+                    self.start_delimiter.clone(),
+                    self.end_delimiter.clone(),
+                ));
+            }
+        }
+
         let mut position = self.start_delimiter.len();
         let mut nesting_level = 1;
 
@@ -380,7 +421,7 @@ impl BlockScanner {
 }
 
 impl Scanner for BlockScanner {
-    fn scan(&self, input: &str) -> Result<Option<Token>, TokenizationError> {
+    fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         // Check if the input starts with the start delimiter
         if !input.starts_with(&self.start_delimiter) {
             return Ok(None);
@@ -389,23 +430,24 @@ impl Scanner for BlockScanner {
         // Find the end of the block
         match self.find_block_end(input) {
             Ok(Some(end_pos)) => {
-                let full_match = &input[0..end_pos];
+                // Slice the input without escape processing first.
+                let inner_start = self.start_delimiter.len();
+                let inner_end   = end_pos - self.end_delimiter.len();
 
-                let raw_value = if self.include_delimiters {
-                    full_match.to_string()
+                let token_value: Cow<'i, str> = if !self.raw_mode && self.transform_escapes {
+                    // Escape processing yields a transformed String — must be Owned.
+                    let raw = if self.include_delimiters {
+                        &input[0..end_pos]
+                    } else {
+                        &input[inner_start..inner_end]
+                    };
+                    Cow::Owned(self.process_escape_sequences(raw))
+                } else if self.include_delimiters {
+                    Cow::Borrowed(&input[0..end_pos])
                 } else {
-                    input[self.start_delimiter.len()..end_pos - self.end_delimiter.len()].to_string()
+                    Cow::Borrowed(&input[inner_start..inner_end])
                 };
 
-                // Process escape sequences if needed
-                let token_value = if !self.raw_mode && self.transform_escapes {
-                    self.process_escape_sequences(&raw_value)
-                } else {
-                    raw_value
-                };
-
-                // Create token with the correct length that accounts for delimiters
-                // even when they're not included in the value
                 let token = Token {
                     token_type: self.token_type,
                     token_sub_type: self.token_sub_type,
@@ -413,48 +455,48 @@ impl Scanner for BlockScanner {
                     span: SourceSpan::UNKNOWN,
                 };
 
-                // Return the full match end position to ensure
-                // tokenizer correctly advances past all consumed characters
                 Ok(Some(token))
-                }
+            }
             Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
+        if !input.starts_with(&self.start_delimiter) {
+            return Ok(None);
         }
 
-        fn scan_with_context(&self, input: &str) -> Result<Option<ScanMatch>, TokenizationError> {
-            if !input.starts_with(&self.start_delimiter) {
-                return Ok(None);
-        }
+        match self.find_block_end(input) {
+            Ok(Some(end_pos)) => {
+                let inner_start = self.start_delimiter.len();
+                let inner_end   = end_pos - self.end_delimiter.len();
 
-            match self.find_block_end(input) {
-                Ok(Some(end_pos)) => {
-                    let full_match = &input[0..end_pos];
-
-                    let raw_value = if self.include_delimiters {
-                        full_match.to_string()
+                let token_value: Cow<'i, str> = if !self.raw_mode && self.transform_escapes {
+                    let raw = if self.include_delimiters {
+                        &input[0..end_pos]
                     } else {
-                        input[self.start_delimiter.len()..end_pos - self.end_delimiter.len()].to_string()
+                        &input[inner_start..inner_end]
                     };
+                    Cow::Owned(self.process_escape_sequences(raw))
+                } else if self.include_delimiters {
+                    Cow::Borrowed(&input[0..end_pos])
+                } else {
+                    Cow::Borrowed(&input[inner_start..inner_end])
+                };
 
-                    let token_value = if !self.raw_mode && self.transform_escapes {
-                        self.process_escape_sequences(&raw_value)
-                    } else {
-                        raw_value
-                    };
-
-                    Ok(Some(ScanMatch {
-                        consumed_len: end_pos,
-                        token: Token {
-                            token_type: self.token_type,
-                            token_sub_type: self.token_sub_type,
-                            value: token_value,
-                            span: SourceSpan::UNKNOWN,
-                        },
-                    }))
-                }
-                Ok(None) => Ok(None),
-                Err(e) => Err(e),
+                Ok(Some(ScanMatch {
+                    consumed_len: end_pos,
+                    token: Token {
+                        token_type: self.token_type,
+                        token_sub_type: self.token_sub_type,
+                        value: token_value,
+                        span: SourceSpan::UNKNOWN,
+                    },
+                }))
             }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
