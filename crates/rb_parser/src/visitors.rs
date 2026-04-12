@@ -167,8 +167,8 @@ impl<'t> SyntaxCursor<'t> {
     /// Iterate over all semantic-node children of the current node.
     pub fn children(&self) -> impl Iterator<Item = SyntaxCursor<'t>> + '_ {
         let tree = self.tree;
-        self.tree.node(self.node_id)
-            .children
+        let node = tree.node(self.node_id);
+        tree.node_children(node)
             .iter()
             .filter_map(move |c| c.child.as_node().map(|id| SyntaxCursor { tree, node_id: id }))
     }
@@ -176,8 +176,8 @@ impl<'t> SyntaxCursor<'t> {
     /// Return the first child node, if any.
     pub fn first_child(&self) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        self.tree.node(self.node_id)
-            .children
+        let node = tree.node(self.node_id);
+        tree.node_children(node)
             .iter()
             .find_map(|c| c.child.as_node().map(|id| SyntaxCursor { tree, node_id: id }))
     }
@@ -185,8 +185,8 @@ impl<'t> SyntaxCursor<'t> {
     /// Return the last child node, if any.
     pub fn last_child(&self) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        self.tree.node(self.node_id)
-            .children
+        let node = tree.node(self.node_id);
+        tree.node_children(node)
             .iter()
             .rev()
             .find_map(|c| c.child.as_node().map(|id| SyntaxCursor { tree, node_id: id }))
@@ -195,8 +195,8 @@ impl<'t> SyntaxCursor<'t> {
     /// Return the first child node of the given `kind`.
     pub fn child_of_kind(&self, kind: SyntaxKind) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        self.tree.node(self.node_id)
-            .children
+        let node = tree.node(self.node_id);
+        tree.node_children(node)
             .iter()
             .find_map(|c| {
                 c.child.as_node().and_then(|id| {
@@ -212,8 +212,8 @@ impl<'t> SyntaxCursor<'t> {
     /// Return the child node with the given field label.
     pub fn field(&self, name: &str) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        self.tree.node(self.node_id)
-            .children
+        let node = tree.node(self.node_id);
+        tree.node_children(node)
             .iter()
             .find_map(|c| {
                 if c.field_name == Some(name) {
@@ -248,8 +248,8 @@ impl<'t> SyntaxCursor<'t> {
         // Linear scan: find any node that has `target` as a child.
         tree.node_ids()
             .find(|&parent_id| {
-                tree.node(parent_id)
-                    .children
+                let node = tree.node(parent_id);
+                tree.node_children(node)
                     .iter()
                     .any(|c| c.child == NodeOrToken::Node(target))
             })
@@ -267,8 +267,8 @@ impl<'t> SyntaxCursor<'t> {
 
     /// Return the first semantic (non-trivia) token child of this node.
     pub fn first_token(&self) -> Option<(SyntaxTokenId, &'t CstToken)> {
-        self.tree.node(self.node_id)
-            .children
+        let node = self.tree.node(self.node_id);
+        self.tree.node_children(node)
             .iter()
             .find_map(|c| {
                 c.child.as_token().and_then(|id| {
@@ -287,7 +287,8 @@ impl<'t> SyntaxCursor<'t> {
 
     fn sibling_after(&self, target: SyntaxNodeId) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        let children = &self.tree.node(self.node_id).children;
+        let node = tree.node(self.node_id);
+        let children = tree.node_children(node);
         let mut found = false;
         for c in children {
             if let Some(id) = c.child.as_node() {
@@ -300,7 +301,8 @@ impl<'t> SyntaxCursor<'t> {
 
     fn sibling_before(&self, target: SyntaxNodeId) -> Option<SyntaxCursor<'t>> {
         let tree = self.tree;
-        let children = &self.tree.node(self.node_id).children;
+        let node = tree.node(self.node_id);
+        let children = tree.node_children(node);
         let mut prev: Option<SyntaxNodeId> = None;
         for c in children {
             if let Some(id) = c.child.as_node() {

@@ -378,6 +378,7 @@ name = "rb_tokenizer"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "memchr",
  "rb_common",
  "regex",
  "serde",

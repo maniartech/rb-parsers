@@ -26,15 +26,17 @@ pub struct CstBuildingStrategy {
     /// Stack of open node builders: (kind, span_start, arena_start).
     ///
     /// `arena_start` is the index into `children_arena` where this node's
-    /// children begin.  On `NodeEnd` we drain `arena_start..` from the arena
-    /// into the finished `CstNode`, then push the new node back as a child of
-    /// the parent.  This eliminates one `Vec` allocation per node, which is
-    /// the dominant cost for wide / deep parse trees.
+    /// children begin.  On `NodeEnd` we move `arena_start..` into the finished
+    /// `children_store` flat arena, record the slice position in the `CstNode`,
+    /// then push the new node as a child of the parent in `children_arena`.
     stack: Vec<(SyntaxKind, SourcePosition, usize)>,
-    /// Flat arena for in-progress node children.  All open nodes share this
-    /// single backing allocation; each node owns a contiguous slice denoted by
-    /// `arena_start..children_arena.len()` at the time it is closed.
+    /// Temporary stack arena for in-progress node children.  All open nodes
+    /// share this single backing allocation; each node owns a contiguous slice
+    /// denoted by `arena_start..children_arena.len()` at the time it is closed.
     children_arena: Vec<CstNodeChild>,
+    /// Final flat arena: children of all completed nodes stored contiguously.
+    /// Each `CstNode` indexes its slice via `children_start` and `children_len`.
+    children_store: Vec<CstNodeChild>,
     /// Current field name context
     field_stack: Vec<&'static str>,
 }
@@ -48,6 +50,7 @@ impl CstBuildingStrategy {
             tokens: Vec::new(),
             stack: Vec::new(),
             children_arena: Vec::new(),
+            children_store: Vec::new(),
             field_stack: Vec::new(),
         }
     }
@@ -64,11 +67,12 @@ impl ParseStrategy for CstBuildingStrategy {
             }
             ParseEvent::NodeEnd { kind: _, span } => {
                 if let Some((kind, _start, arena_start)) = self.stack.pop() {
-                    // Collect all children accumulated in the arena since NodeStart.
-                    let children: Vec<CstNodeChild> =
-                        self.children_arena.drain(arena_start..).collect();
+                    // Move this node's children from the temp arena into the final flat store.
+                    let children_start = self.children_store.len() as u32;
+                    let children_len = (self.children_arena.len() - arena_start) as u16;
+                    self.children_store.extend(self.children_arena.drain(arena_start..));
                     let id = SyntaxNodeId(self.nodes.len() as u32);
-                    let node = CstNode { id, kind, span, children, is_error_recovery: false };
+                    let node = CstNode { id, kind, span, children_start, children_len, is_error_recovery: false };
                     self.nodes.push(node);
                     // Register completed node as a child of the enclosing node.
                     let not = NodeOrToken::Node(id);
@@ -105,11 +109,12 @@ impl ParseStrategy for CstBuildingStrategy {
         // If the stack still has entries (e.g. top-level node), close them.
         while self.stack.len() > 1 {
             if let Some((kind, start, arena_start)) = self.stack.pop() {
-                let children: Vec<CstNodeChild> =
-                    self.children_arena.drain(arena_start..).collect();
+                let children_start = self.children_store.len() as u32;
+                let children_len = (self.children_arena.len() - arena_start) as u16;
+                self.children_store.extend(self.children_arena.drain(arena_start..));
                 let id = SyntaxNodeId(self.nodes.len() as u32);
                 let span = SourceSpan::new(self.source_id, start, start);
-                let node = CstNode { id, kind, span, children, is_error_recovery: true };
+                let node = CstNode { id, kind, span, children_start, children_len, is_error_recovery: true };
                 self.nodes.push(node);
                 let not = NodeOrToken::Node(id);
                 if self.stack.last().is_some() {
@@ -120,12 +125,13 @@ impl ParseStrategy for CstBuildingStrategy {
         }
         // Last entry is the root
         let root_id = if let Some((kind, start, arena_start)) = self.stack.pop() {
-            let children: Vec<CstNodeChild> =
-                self.children_arena.drain(arena_start..).collect();
+            let children_start = self.children_store.len() as u32;
+            let children_len = (self.children_arena.len() - arena_start) as u16;
+            self.children_store.extend(self.children_arena.drain(arena_start..));
             let id = SyntaxNodeId(self.nodes.len() as u32);
             let end = self.tokens.last().map(|t| t.span.end).unwrap_or(start);
             let span = SourceSpan::new(self.source_id, start, end);
-            self.nodes.push(CstNode { id, kind, span, children, is_error_recovery: false });
+            self.nodes.push(CstNode { id, kind, span, children_start, children_len, is_error_recovery: false });
             id
         } else if !self.nodes.is_empty() {
             SyntaxNodeId((self.nodes.len() - 1) as u32)
@@ -136,13 +142,14 @@ impl ParseStrategy for CstBuildingStrategy {
                 id,
                 kind: SyntaxKind::new("Root"),
                 span: SourceSpan::UNKNOWN,
-                children: Vec::new(),
+                children_start: 0,
+                children_len: 0,
                 is_error_recovery: false,
             });
             id
         };
 
-        CstTree::new(self.nodes, self.tokens, root_id, self.source_id)
+        CstTree::new(self.nodes, self.tokens, root_id, self.source_id, self.children_store)
     }
 }
 

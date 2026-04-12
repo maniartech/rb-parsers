@@ -1,5 +1,6 @@
 use crate::scanners::char_class_scanner::CharClassScanner;
 use crate::scanners::contextual_scanner::{ContextualClosureScanner, ContextualScanner};
+use crate::tokenizers::source_map::SourceMap;
 use crate::scanners::keyword_scanner::KeywordScanner;
 use crate::scanners::number_literal_scanner::NumberLiteralScanner;
 use crate::scanners::operator_scanner::OperatorScanner;
@@ -83,21 +84,6 @@ impl Default for Tokenizer {
 }
 
 impl Tokenizer {
-    /// Advance line/column counters by scanning the bytes of a consumed token slice.
-    /// Counts Unicode code points (non-continuation bytes) for column tracking.
-    #[inline]
-    fn advance_pos(slice: &[u8], current_line: &mut usize, current_column: &mut usize) {
-        for &b in slice {
-            if b == b'\n' {
-                *current_line += 1;
-                *current_column = 1;
-            } else if b & 0xC0 != 0x80 {
-                // Non-continuation byte = start of a Unicode code point.
-                *current_column += 1;
-            }
-        }
-    }
-
     /// Creates a `Tokenizer` with the default config.
     pub fn new() -> Self {
         Tokenizer {
@@ -549,8 +535,12 @@ impl Tokenizer {
         let mut tokens = Vec::with_capacity(input.len() / 6);
         let mut errors = Vec::new();
 
-        let mut current_line: usize = 1;
-        let mut current_column: usize = 1;
+        // B5: build the SourceMap once; positions are looked up lazily in O(log n).
+        let source_map = if self.config.track_token_positions {
+            Some(SourceMap::new(input.as_bytes()))
+        } else {
+            None
+        };
         let mut pos: usize = 0;
 
         while pos < input.len() {
@@ -567,19 +557,7 @@ impl Tokenizer {
                         let token_len = scan_match.consumed_len;
                         let partial = scan_match.token;
 
-                        // Advance position before the drop check so cursor is always correct.
                         let start_byte = pos;
-                        let start_pos = SourcePosition {
-                            byte_offset: start_byte,
-                            line: current_line - 1,
-                            column: current_column - 1,
-                        };
-
-                        Self::advance_pos(
-                            input[pos..pos + token_len].as_bytes(),
-                            &mut current_line,
-                            &mut current_column,
-                        );
                         pos += token_len;
 
                         // Drop trivia if configured.
@@ -588,15 +566,13 @@ impl Tokenizer {
                             break;
                         }
 
-                        let span = if self.config.track_token_positions {
+                        let span = if let Some(ref sm) = source_map {
+                            let (sl, sc) = sm.position_of(start_byte);
+                            let (el, ec) = sm.position_of(pos);
                             SourceSpan {
                                 source_id: self.source_id,
-                                start: start_pos,
-                                end: SourcePosition {
-                                    byte_offset: pos,
-                                    line: current_line - 1,
-                                    column: current_column - 1,
-                                },
+                                start: SourcePosition { byte_offset: start_byte, line: sl, column: sc },
+                                end: SourcePosition { byte_offset: pos, line: el, column: ec },
                             }
                         } else {
                             SourceSpan::UNKNOWN
@@ -614,10 +590,15 @@ impl Tokenizer {
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        let err_span = SourceSpan {
-                            source_id: self.source_id,
-                            start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
-                            end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                        let err_span = if let Some(ref sm) = source_map {
+                            let (el, ec) = sm.position_of(pos);
+                            SourceSpan {
+                                source_id: self.source_id,
+                                start: SourcePosition { byte_offset: pos, line: el, column: ec },
+                                end: SourcePosition { byte_offset: pos, line: el, column: ec },
+                            }
+                        } else {
+                            SourceSpan::UNKNOWN
                         };
                         errors.push(e.at(err_span));
 
@@ -628,11 +609,8 @@ impl Tokenizer {
 
                         // If we encounter an error but want to continue, skip this character.
                         if self.config.continue_on_error {
-                            // Skip the current character without decoding it as a char.
-                            // b0 already in scope from dispatch table computation above.
                             pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
-                            current_column += 1;
-                            matched = true; // Mark as matched so we don't double-count this error
+                            matched = true;
                             break;
                         } else {
                             *self.last_errors.borrow_mut() = Some(errors.clone());
@@ -654,44 +632,34 @@ impl Tokenizer {
                 if is_ws {
                     if self.config.tokenize_whitespace {
                         let ws_start_byte = pos;
-                        let ws_start_line = current_line;
-                        let ws_start_col = current_column;
                         let mut has_newline = false;
-
+                        // Advance pos; track has_newline for sub-type only.
                         while pos < input.len() {
                             match input.as_bytes()[pos] {
-                                b'\n' => { has_newline = true; current_line += 1; current_column = 1; pos += 1; }
-                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                b'\n' => { has_newline = true; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { pos += 1; }
                                 0x80..=0xFF => {
                                     let ch = input[pos..].chars().next().unwrap();
                                     if !ch.is_whitespace() { break; }
-                                    if ch == '\n' { has_newline = true; current_line += 1; current_column = 1; }
-                                    else { current_column += 1; }
+                                    if ch == '\n' { has_newline = true; }
                                     pos += ch.len_utf8();
                                 }
                                 _ => break,
                             }
                         }
 
-                        let ws_span = if self.config.track_token_positions {
-                            SourceSpan {
-                                source_id: self.source_id,
-                                start: SourcePosition {
-                                    byte_offset: ws_start_byte,
-                                    line: ws_start_line - 1,
-                                    column: ws_start_col - 1,
-                                },
-                                end: SourcePosition {
-                                    byte_offset: pos,
-                                    line: current_line - 1,
-                                    column: current_column - 1,
-                                },
-                            }
-                        } else {
-                            SourceSpan::UNKNOWN
-                        };
-
                         if !self.config.drop_token_types.contains("Whitespace") {
+                            let ws_span = if let Some(ref sm) = source_map {
+                                let (sl, sc) = sm.position_of(ws_start_byte);
+                                let (el, ec) = sm.position_of(pos);
+                                SourceSpan {
+                                    source_id: self.source_id,
+                                    start: SourcePosition { byte_offset: ws_start_byte, line: sl, column: sc },
+                                    end: SourcePosition { byte_offset: pos, line: el, column: ec },
+                                }
+                            } else {
+                                SourceSpan::UNKNOWN
+                            };
                             tokens.push(Token {
                                 token_type: "Whitespace",
                                 token_sub_type: if has_newline { Some("Newline") } else { None },
@@ -700,16 +668,13 @@ impl Tokenizer {
                             });
                         }
                     } else {
-                        // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
+                        // Skip whitespace — pure byte advance, no line/col tracking needed.
                         while pos < input.len() {
                             match input.as_bytes()[pos] {
-                                b'\n' => { current_line += 1; current_column = 1; pos += 1; }
-                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                b'\n' | b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { pos += 1; }
                                 0x80..=0xFF => {
                                     let ch = input[pos..].chars().next().unwrap();
                                     if !ch.is_whitespace() { break; }
-                                    if ch == '\n' { current_line += 1; current_column = 1; }
-                                    else { current_column += 1; }
                                     pos += ch.len_utf8();
                                 }
                                 _ => break,
@@ -718,20 +683,22 @@ impl Tokenizer {
                     }
                 } else {
                     let next_char = decoded_char.unwrap_or(b0 as char);
+                    let (el, ec) = source_map.as_ref()
+                        .map(|sm| sm.position_of(pos))
+                        .unwrap_or((0, 0));
                     let err_span = SourceSpan {
                         source_id: self.source_id,
-                        start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
-                        end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                        start: SourcePosition { byte_offset: pos, line: el, column: ec },
+                        end: SourcePosition { byte_offset: pos, line: el, column: ec },
                     };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
-                            current_line, current_column, next_char)
+                            el + 1, ec + 1, next_char)
                     ).at(err_span);
                     errors.push(error);
 
                     if self.config.continue_on_error {
                         pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
-                        current_column += 1;
                     } else {
                         break;
                     }
@@ -771,16 +738,18 @@ impl Tokenizer {
         let mut errors = Vec::new();
         let mut ctx = ScanContext::new();
 
-        let mut current_line = 1usize;
-        let mut current_column = 1usize;
+        // B5: SourceMap is always needed here for ctx.line / ctx.column.
+        let source_map = SourceMap::new(input.as_bytes());
         let mut pos: usize = 0;
 
         while pos < input.len() {
             let current_input = &input[pos..];
             let mut matched = false;
 
-            ctx.line = current_line;
-            ctx.column = current_column;
+            // Provide 1-based line/col to contextual scanners.
+            let (ctx_line_0, ctx_col_0) = source_map.position_of(pos);
+            ctx.line   = ctx_line_0 + 1;
+            ctx.column = ctx_col_0  + 1;
 
             // SAFETY: pos < input.len() guarantees at least one byte.
             let b0 = current_input.as_bytes()[0];
@@ -793,17 +762,6 @@ impl Tokenizer {
                         let partial = scan_match.token;
 
                         let start_byte = pos;
-                        let start_pos = SourcePosition {
-                            byte_offset: start_byte,
-                            line: current_line - 1,
-                            column: current_column - 1,
-                        };
-
-                        Self::advance_pos(
-                            input[pos..pos + token_len].as_bytes(),
-                            &mut current_line,
-                            &mut current_column,
-                        );
                         pos += token_len;
 
                         // Drop trivia if configured.
@@ -813,14 +771,12 @@ impl Tokenizer {
                         }
 
                         let span = if self.config.track_token_positions {
+                            let (sl, sc) = source_map.position_of(start_byte);
+                            let (el, ec) = source_map.position_of(pos);
                             SourceSpan {
                                 source_id: self.source_id,
-                                start: start_pos,
-                                end: SourcePosition {
-                                    byte_offset: pos,
-                                    line: current_line - 1,
-                                    column: current_column - 1,
-                                },
+                                start: SourcePosition { byte_offset: start_byte, line: sl, column: sc },
+                                end: SourcePosition { byte_offset: pos, line: el, column: ec },
                             }
                         } else {
                             SourceSpan::UNKNOWN
@@ -841,10 +797,13 @@ impl Tokenizer {
                     }
                     Ok(None) => {}
                     Err(e) => {
+                        let (el, ec) = if self.config.track_token_positions {
+                            source_map.position_of(pos)
+                        } else { (0, 0) };
                         let err_span = SourceSpan {
                             source_id: self.source_id,
-                            start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
-                            end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                            start: SourcePosition { byte_offset: pos, line: el, column: ec },
+                            end: SourcePosition { byte_offset: pos, line: el, column: ec },
                         };
                         errors.push(e.at(err_span));
                         if errors.len() >= self.config.error_tolerance_limit {
@@ -852,9 +811,7 @@ impl Tokenizer {
                             return Err(errors);
                         }
                         if self.config.continue_on_error {
-                            // b0 already in scope from dispatch table computation above
                             pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
-                            current_column += 1;
                             matched = true;
                             break;
                         } else {
@@ -876,64 +833,47 @@ impl Tokenizer {
                 if is_ws {
                     if self.config.tokenize_whitespace {
                         let ws_start_byte = pos;
-                        let start_line = current_line;
-                        let start_column = current_column;
                         let mut has_newline = false;
-
                         while pos < input.len() {
                             match input.as_bytes()[pos] {
-                                b'\n' => { has_newline = true; current_line += 1; current_column = 1; pos += 1; }
-                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                b'\n' => { has_newline = true; pos += 1; }
+                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { pos += 1; }
                                 0x80..=0xFF => {
                                     let ch = input[pos..].chars().next().unwrap();
                                     if !ch.is_whitespace() { break; }
-                                    if ch == '\n' { has_newline = true; current_line += 1; current_column = 1; }
-                                    else { current_column += 1; }
+                                    if ch == '\n' { has_newline = true; }
                                     pos += ch.len_utf8();
                                 }
                                 _ => break,
                             }
                         }
 
-                        let ws_span = if self.config.track_token_positions {
-                            SourceSpan {
-                                source_id: self.source_id,
-                                start: SourcePosition {
-                                    byte_offset: ws_start_byte,
-                                    line: start_line - 1,
-                                    column: start_column - 1,
-                                },
-                                end: SourcePosition {
-                                    byte_offset: pos,
-                                    line: current_line - 1,
-                                    column: current_column - 1,
-                                },
-                            }
-                        } else {
-                            SourceSpan::UNKNOWN
-                        };
-
                         let ws_token = Token {
                             token_type: "Whitespace",
                             token_sub_type: if has_newline { Some("Newline") } else { None },
                             value: Cow::Borrowed(&input[ws_start_byte..pos]),
-                            span: ws_span,
+                            span: if self.config.track_token_positions {
+                                let (sl, sc) = source_map.position_of(ws_start_byte);
+                                let (el, ec) = source_map.position_of(pos);
+                                SourceSpan {
+                                    source_id: self.source_id,
+                                    start: SourcePosition { byte_offset: ws_start_byte, line: sl, column: sc },
+                                    end: SourcePosition { byte_offset: pos, line: el, column: ec },
+                                }
+                            } else { SourceSpan::UNKNOWN },
                         };
                         if !self.config.drop_token_types.contains(ws_token.token_type) {
                             ctx.prev_token_kind = Some(ws_token.token_type);
                             tokens.push(ws_token);
                         }
                     } else {
-                        // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
+                        // Skip whitespace — pure byte advance.
                         while pos < input.len() {
                             match input.as_bytes()[pos] {
-                                b'\n' => { current_line += 1; current_column = 1; pos += 1; }
-                                b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { current_column += 1; pos += 1; }
+                                b'\n' | b' ' | b'\t' | b'\r' | 0x0B | 0x0C => { pos += 1; }
                                 0x80..=0xFF => {
                                     let ch = input[pos..].chars().next().unwrap();
                                     if !ch.is_whitespace() { break; }
-                                    if ch == '\n' { current_line += 1; current_column = 1; }
-                                    else { current_column += 1; }
                                     pos += ch.len_utf8();
                                 }
                                 _ => break,
@@ -942,19 +882,21 @@ impl Tokenizer {
                     }
                 } else {
                     let next_char = decoded_char.unwrap_or(b0 as char);
+                    let (el, ec) = if self.config.track_token_positions {
+                        source_map.position_of(pos)
+                    } else { (0, 0) };
                     let err_span = SourceSpan {
                         source_id: self.source_id,
-                        start: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
-                        end: SourcePosition { byte_offset: pos, line: current_line - 1, column: current_column - 1 },
+                        start: SourcePosition { byte_offset: pos, line: el, column: ec },
+                        end: SourcePosition { byte_offset: pos, line: el, column: ec },
                     };
                     let error = TokenizationError::UnrecognizedToken(
                         format!("Unrecognized token at line {}, column {}: '{}'",
-                            current_line, current_column, next_char)
+                            el + 1, ec + 1, next_char)
                     ).at(err_span);
                     errors.push(error);
                     if self.config.continue_on_error {
                         pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
-                        current_column += 1;
                     } else {
                         break;
                     }

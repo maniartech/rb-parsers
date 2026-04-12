@@ -16,6 +16,7 @@ pub mod utils;
 
 // Re-export main types at crate root for easier access
 pub use tokenizers::{BinaryToken, BinaryTokenizer, Tokenizer, TokenizerConfig};
+pub use tokenizers::source_map::SourceMap;
 pub use scanners::{
     BinaryScanner, CharClassScanner, ContextualClosureScanner, ContextualScanner,
     IndentationScanner, KeywordScanner, NumberLiteralScanner, OperatorScanner, ScanContext,

@@ -90,8 +90,11 @@ pub struct CstNode {
     pub kind: SyntaxKind,
     /// Source range covered by this node and all its descendants.
     pub span: SourceSpan,
-    /// Ordered list of child nodes and leaf tokens.
-    pub children: Vec<CstNodeChild>,
+    /// Start index into [`CstTree::children_store`].
+    pub children_start: u32,
+    /// Number of direct children stored in [`CstTree::children_store`]
+    /// starting at [`children_start`](Self::children_start).
+    pub children_len: u16,
     /// `true` when this node was synthesised by the error-recovery strategy to
     /// represent an unclosed or missing construct. Such nodes may have a
     /// zero-width span that is otherwise indistinguishable from a genuinely
@@ -101,8 +104,9 @@ pub struct CstNode {
 
 impl CstNode {
     /// Returns the first child with the given field name.
-    pub fn field(&self, name: &str) -> Option<NodeOrToken> {
-        self.children
+    /// `children` must be the slice `tree.node_children(self)`.
+    pub fn field(&self, children: &[CstNodeChild], name: &str) -> Option<NodeOrToken> {
+        children
             .iter()
             .find(|c| c.field_name == Some(name))
             .map(|c| c.child)
@@ -114,27 +118,33 @@ impl CstNode {
     /// > **Note:** This is inconsistent with [`CstTree::tokens_of`] which
     /// > only returns semantic (non-trivia) tokens. Prefer
     /// > [`CstNode::direct_semantic_tokens`] when you want the same behaviour.
-    pub fn direct_tokens(&self) -> impl Iterator<Item = SyntaxTokenId> + '_ {
-        self.children.iter().filter_map(|c| c.child.as_token())
+    ///
+    /// `children` must be the slice `tree.node_children(self)`.
+    pub fn direct_tokens<'s>(children: &'s [CstNodeChild]) -> impl Iterator<Item = SyntaxTokenId> + 's {
+        children.iter().filter_map(|c| c.child.as_token())
     }
 
     /// Returns the IDs of **semantic** (non-trivia) token children of this
     /// node. Consistent with [`CstTree::tokens_of`].
     ///
     /// Use [`direct_tokens`](Self::direct_tokens) if you also need trivia tokens.
+    ///
+    /// `children` must be the slice `tree.node_children(self)`.
     pub fn direct_semantic_tokens<'a>(
-        &'a self,
+        children: &'a [CstNodeChild],
         tree: &'a CstTree,
     ) -> impl Iterator<Item = SyntaxTokenId> + 'a {
-        self.children
+        children
             .iter()
             .filter_map(|c| c.child.as_token())
             .filter(move |&id| !tree.token(id).is_trivia)
     }
 
     /// Returns an iterator over the IDs of all direct child *nodes* (no tokens).
-    pub fn direct_nodes(&self) -> impl Iterator<Item = SyntaxNodeId> + '_ {
-        self.children.iter().filter_map(|c| c.child.as_node())
+    ///
+    /// `children` must be the slice `tree.node_children(self)`.
+    pub fn direct_nodes(children: &[CstNodeChild]) -> impl Iterator<Item = SyntaxNodeId> + '_ {
+        children.iter().filter_map(|c| c.child.as_node())
     }
 }
 
@@ -184,6 +194,9 @@ pub struct CstTree {
     tokens: Vec<CstToken>,
     root: SyntaxNodeId,
     source_id: SourceId,
+    /// Flat arena: direct children of every node, stored contiguously.
+    /// Each `CstNode` references its slice via `children_start` and `children_len`.
+    children_store: Vec<CstNodeChild>,
 }
 
 impl CstTree {
@@ -193,8 +206,16 @@ impl CstTree {
         tokens: Vec<CstToken>,
         root: SyntaxNodeId,
         source_id: SourceId,
+        children_store: Vec<CstNodeChild>,
     ) -> Self {
-        CstTree { nodes, tokens, root, source_id }
+        CstTree { nodes, tokens, root, source_id, children_store }
+    }
+
+    /// Returns the direct children of `node` as a slice into the shared arena.
+    #[inline]
+    pub fn node_children(&self, node: &CstNode) -> &[CstNodeChild] {
+        let s = node.children_start as usize;
+        &self.children_store[s..s + node.children_len as usize]
     }
 
     // ── Root access ──────────────────────────────────────────────────────────
@@ -241,13 +262,17 @@ impl CstTree {
 
     /// Returns the named-field child *node* of `node_id`, if present.
     pub fn field_node(&self, node_id: SyntaxNodeId, name: &str) -> Option<&CstNode> {
-        let child = self.node(node_id).field(name)?;
+        let node = self.node(node_id);
+        let ch = self.node_children(node);
+        let child = node.field(ch, name)?;
         child.as_node().map(|id| self.node(id))
     }
 
     /// Returns the named-field child *token* of `node_id`, if present.
     pub fn field_token(&self, node_id: SyntaxNodeId, name: &str) -> Option<&CstToken> {
-        let child = self.node(node_id).field(name)?;
+        let node = self.node(node_id);
+        let ch = self.node_children(node);
+        let child = node.field(ch, name)?;
         child.as_token().map(|id| self.token(id))
     }
 
@@ -282,16 +307,14 @@ impl CstTree {
 
     /// Returns the direct child *nodes* of `node_id`.
     pub fn children_of(&self, node_id: SyntaxNodeId) -> impl Iterator<Item = &CstNode> + '_ {
-        self.node(node_id)
-            .children
+        self.node_children(self.node(node_id))
             .iter()
             .filter_map(|c| c.child.as_node().map(|id| self.node(id)))
     }
 
     /// Returns the direct non-trivia tokens of `node_id`.
     pub fn tokens_of(&self, node_id: SyntaxNodeId) -> impl Iterator<Item = &CstToken> + '_ {
-        self.node(node_id)
-            .children
+        self.node_children(self.node(node_id))
             .iter()
             .filter_map(|c| c.child.as_token().map(|id| self.token(id)))
             .filter(|t| !t.is_trivia)
@@ -301,8 +324,7 @@ impl CstTree {
     pub fn descendants(&self, node_id: SyntaxNodeId) -> impl Iterator<Item = &CstNode> + '_ {
         // Pre-order DFS using an explicit stack to avoid recursion.
         let mut stack: Vec<SyntaxNodeId> = self
-            .node(node_id)
-            .children
+            .node_children(self.node(node_id))
             .iter()
             .filter_map(|c| c.child.as_node())
             .collect();
@@ -310,8 +332,8 @@ impl CstTree {
         std::iter::from_fn(move || {
             let id = stack.pop()?;
             let node = &self.nodes[id.0 as usize];
-            let mut children: Vec<SyntaxNodeId> = node
-                .children
+            let mut children: Vec<SyntaxNodeId> = self
+                .node_children(node)
                 .iter()
                 .filter_map(|c| c.child.as_node())
                 .collect();
@@ -330,8 +352,7 @@ impl CstTree {
     pub fn walk_node(&self, node_id: SyntaxNodeId, visitor: &mut dyn crate::visitors::TreeVisitor) {
         // Collect the lightweight `NodeOrToken` IDs (Copy) before any visitor call so
         // that the borrow of `self` is not held across mutable visitor callbacks.
-        let children: Vec<NodeOrToken> = self.node(node_id)
-            .children
+        let children: Vec<NodeOrToken> = self.node_children(self.node(node_id))
             .iter()
             .map(|c| c.child)
             .collect();
@@ -387,7 +408,7 @@ impl CstTree {
         out.push('(');
         out.push_str(node.kind.as_str());
         // Filter out trivia for the s-expression (it clutters the output)
-        let semantic_children: Vec<&CstNodeChild> = node.children
+        let semantic_children: Vec<&CstNodeChild> = self.node_children(node)
             .iter()
             .filter(|c| match c.child {
                 NodeOrToken::Token(id) => !self.token(id).is_trivia,

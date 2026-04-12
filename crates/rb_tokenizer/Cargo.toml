@@ -10,6 +10,7 @@ edition = "2021"
 serde = ["dep:serde", "rb_common/serde"]
 
 [dependencies]
+memchr = "2"
 regex = "1.10.3"
 rb_common = { path = "../rb_common" }
 serde = { version = "1", features = ["derive"], optional = true }
