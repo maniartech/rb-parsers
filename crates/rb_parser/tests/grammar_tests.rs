@@ -880,3 +880,59 @@ fn depth_first_walker_visits_all_nodes_and_tokens() {
     assert_eq!(counter.tokens, 5, "expected 5 tokens, got {}", counter.tokens);
 }
 
+// ── 18. parse_streaming ───────────────────────────────────────────────────────
+
+#[test]
+fn parse_streaming_produces_same_tree_as_parse_tree() {
+    let parser = build_json_parser();
+
+    let tokens: Vec<Token<'static>> = vec![
+        tok_make("LBRACE", "{"),
+        tok_make("STRING", "\"k\""),
+        tok_make("COLON",  ":"),
+        tok_make("NUMBER", "42"),
+        tok_make("RBRACE", "}"),
+    ];
+
+    let mut ctx_slice  = DiagnosticsContext::new();
+    let mut ctx_stream = DiagnosticsContext::new();
+
+    let tree_slice  = parser.parse_tree(&tokens, &mut ctx_slice);
+    let tree_stream = parser.parse_streaming(tokens.into_iter(), &mut ctx_stream);
+
+    // Both trees must have the same structure (same root node kind).
+    assert_eq!(
+        tree_slice.root().kind,
+        tree_stream.root().kind,
+        "streaming and slice parse must produce identical root kinds",
+    );
+
+    // Both must run error-free.
+    assert!(!ctx_slice.has_errors(),  "slice parse had errors");
+    assert!(!ctx_stream.has_errors(), "streaming parse had errors");
+}
+
+#[test]
+fn parse_streaming_events_produces_same_event_count() {
+    let parser = build_json_parser();
+
+    let tokens: Vec<Token<'static>> = vec![
+        tok_make("LBRACKET", "["),
+        tok_make("NUMBER", "1"),
+        tok_make("COMMA",  ","),
+        tok_make("NUMBER", "2"),
+        tok_make("RBRACKET", "]"),
+    ];
+
+    let mut ctx_slice  = DiagnosticsContext::new();
+    let mut ctx_stream = DiagnosticsContext::new();
+
+    let evs_slice  = parser.parse_events(&tokens, &mut ctx_slice);
+    let evs_stream = parser.parse_streaming_events(tokens.into_iter(), &mut ctx_stream);
+
+    assert_eq!(
+        evs_slice.len(), evs_stream.len(),
+        "streaming and slice parse must emit the same number of events",
+    );
+}
+

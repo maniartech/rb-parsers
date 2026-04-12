@@ -806,7 +806,7 @@ impl<R: RuleId> CompiledGrammar<R> {
 /// without any `unsafe` code.
 pub(crate) fn eval<'g, R: RuleId, S: ParseStrategy>(
     expr: &'g RuleExpr<R>,
-    ctx: &mut ParseContext<'_>,
+    ctx: &mut ParseContext<'_, '_>,
     grammar: &'g CompiledGrammar<R>,
     strategy: &mut S,
     current_field: Option<&'static str>,
@@ -938,7 +938,7 @@ pub(crate) fn eval<'g, R: RuleId, S: ParseStrategy>(
             let span_start = ctx.peek().map(|t| t.span.start).unwrap_or(SourcePosition::ZERO);
             strategy.on_event(ParseEvent::NodeStart { kind: *kind, span_start });
             let result = eval(inner, ctx, grammar, strategy, current_field, recovery_steps, max_recovery_steps);
-            let span_end = ctx.tokens().get(ctx.cursor().saturating_sub(1))
+            let span_end = ctx.peek_back()
                 .map(|t| t.span.end)
                 .unwrap_or(span_start);
             strategy.on_event(ParseEvent::NodeEnd { kind: *kind, span: SourceSpan::new(sid, span_start, span_end) });
@@ -1173,7 +1173,7 @@ pub(crate) fn eval<'g, R: RuleId, S: ParseStrategy>(
 #[allow(clippy::too_many_arguments)]
 fn eval_pratt<'g, R: RuleId, S: ParseStrategy>(
     spec: &'g PrattSpec<R>,
-    ctx: &mut ParseContext<'_>,
+    ctx: &mut ParseContext<'_, '_>,
     grammar: &'g CompiledGrammar<R>,
     strategy: &mut S,
     current_field: Option<&'static str>,
@@ -1206,7 +1206,7 @@ fn eval_pratt<'g, R: RuleId, S: ParseStrategy>(
                     return f;
                 }
             }
-            let span_end = ctx.tokens().get(ctx.cursor().saturating_sub(1)).map(|t| t.span.end).unwrap_or(span_start);
+            let span_end = ctx.peek_back().map(|t| t.span.end).unwrap_or(span_start);
             strategy.on_event(ParseEvent::NodeEnd { kind: op.node_kind, span: SourceSpan::new(sid, span_start, span_end) });
             matched_prefix = true;
             break;
@@ -1257,7 +1257,7 @@ fn eval_pratt<'g, R: RuleId, S: ParseStrategy>(
                     Success(()) => {}
                     f => { strategy.on_event(ParseEvent::NodeEnd { kind: op.node_kind, span }); return f; }
                 }
-                let span_end = ctx.tokens().get(ctx.cursor().saturating_sub(1)).map(|t| t.span.end).unwrap_or(span_start);
+                let span_end = ctx.peek_back().map(|t| t.span.end).unwrap_or(span_start);
                 strategy.on_event(ParseEvent::NodeEnd { kind: op.node_kind, span: SourceSpan::new(sid, span_start, span_end) });
                 handled = true;
                 break;

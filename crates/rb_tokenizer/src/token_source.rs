@@ -24,6 +24,27 @@ pub trait TokenSource<'src> {
     fn is_exhausted(&self) -> bool {
         self.peek(0).is_none()
     }
+
+    /// Return the token immediately before the current position, or `None`.
+    ///
+    /// Used by the parse engine to compute span ends for completed nodes.
+    /// The default implementation returns `None`; slice-backed sources override
+    /// this to return the actual preceding token.
+    fn peek_back(&self) -> Option<&crate::tokens::Token<'src>> { None }
+
+    /// Return the last token in the source, or `None` if the source is empty.
+    ///
+    /// Used to synthesise an EOF diagnostic location when the cursor is past
+    /// the end of the input.  The default returns `None`.
+    fn last_token(&self) -> Option<&crate::tokens::Token<'src>> { None }
+
+    /// Inform the source that no backtrack point below `pos` will ever be used.
+    ///
+    /// For [`BufferedTokenSource`] this allows the sliding window to evict
+    /// tokens before `pos`, keeping memory usage proportional to the active
+    /// backtracking window.  The default implementation is a no-op (correct
+    /// for slice-backed sources that do not evict).
+    fn set_commit(&mut self, _pos: usize) {}
 }
 
 // ── SliceTokenSource ──────────────────────────────────────────────────────────
@@ -68,6 +89,16 @@ impl<'src> TokenSource<'src> for SliceTokenSource<'src> {
         debug_assert!(pos <= self.pos, "SliceTokenSource::reset_to: cannot fast-forward");
         self.pos = pos;
     }
+
+    fn peek_back(&self) -> Option<&crate::tokens::Token<'src>> {
+        if self.pos == 0 { None } else { self.tokens.get(self.pos - 1) }
+    }
+
+    fn last_token(&self) -> Option<&crate::tokens::Token<'src>> {
+        self.tokens.last()
+    }
+
+    // set_commit is a no-op for slice sources — default impl is sufficient.
 }
 
 // ── BufferedTokenSource ───────────────────────────────────────────────────────
@@ -204,5 +235,26 @@ where
         );
         debug_assert!(pos <= self.pos.get(), "BufferedTokenSource::reset_to: cannot fast-forward");
         self.pos.set(pos);
+    }
+
+    fn peek_back(&self) -> Option<&crate::tokens::Token<'src>> {
+        let pos = self.pos.get();
+        if pos == 0 { return None; }
+        let abs = pos - 1;
+        let base = self.base.get();
+        if abs < base { return None; }  // already evicted
+        let buf_idx = abs - base;
+        let guard = self.buffer.borrow();
+        guard.get(buf_idx).map(|tok| unsafe { &*(tok as *const _) })
+    }
+
+    fn last_token(&self) -> Option<&crate::tokens::Token<'src>> {
+        if !self.exhausted.get() { return None; }
+        let guard = self.buffer.borrow();
+        guard.back().map(|tok| unsafe { &*(tok as *const _) })
+    }
+
+    fn set_commit(&mut self, pos: usize) {
+        self.set_commit(pos);
     }
 }

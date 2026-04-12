@@ -43,6 +43,7 @@ pub mod visitors;
 
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_common::spans::SourceId;
+use rb_tokenizer::token_source::{BufferedTokenSource, SliceTokenSource, TokenSource};
 use rb_tokenizer::tokens::Token;
 
 use crate::cst::CstTree;
@@ -129,6 +130,27 @@ trait ParseFn: Send + Sync {
     /// Returns the FIRST set of the rule with the given name, or `None` if the
     /// rule does not exist. This is the set of token types that can start the rule.
     fn first_set_named(&self, rule_name: &str) -> Option<std::collections::HashSet<&'static str>>;
+
+    /// Build a `CstTree` from a boxed token iterator (streaming mode).
+    fn run_streaming_building(
+        &self,
+        iter: Box<dyn Iterator<Item = Token<'static>>>,
+        ctx: &mut DiagnosticsContext,
+        profile: &ResolvedProfile,
+        recovery: &RecoveryConfig,
+        source_id: SourceId,
+    ) -> CstTree;
+
+    /// Collect all `ParseEvent`s from a boxed token iterator (streaming mode).
+    fn run_streaming_collecting(
+        &self,
+        iter: Box<dyn Iterator<Item = Token<'static>>>,
+        ctx: &mut DiagnosticsContext,
+        profile: &ResolvedProfile,
+        recovery: &RecoveryConfig,
+        source_id: SourceId,
+        capacity_hint: usize,
+    ) -> Vec<ParseEvent>;
 }
 
 struct GrammarParseFn<R: RuleId> {
@@ -152,7 +174,10 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
             fn finish(self) {}
         }
 
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
+        let mut parse_ctx = ParseContext::new(
+            Box::new(SliceTokenSource::new(tokens)),
+            ctx, profile, source_id,
+        );
         let mut strategy = CallbackStrategy(emit);
         let mut recovery_steps = 0usize;
 
@@ -168,7 +193,10 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         recovery: &RecoveryConfig,
         source_id: SourceId,
     ) -> CstTree {
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
+        let mut parse_ctx = ParseContext::new(
+            Box::new(SliceTokenSource::new(tokens)),
+            ctx, profile, source_id,
+        );
         let mut strategy = CstBuildingStrategy::new(source_id);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
@@ -185,7 +213,10 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         source_id: SourceId,
         capacity_hint: usize,
     ) -> Vec<ParseEvent> {
-        let mut parse_ctx = ParseContext::new(tokens, ctx, profile, source_id);
+        let mut parse_ctx = ParseContext::new(
+            Box::new(SliceTokenSource::new(tokens)),
+            ctx, profile, source_id,
+        );
         let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
@@ -204,6 +235,43 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
     fn first_set_named(&self, rule_name: &str) -> Option<std::collections::HashSet<&'static str>> {
         let idx = self.grammar.rule_names.iter().position(|n| n == rule_name)?;
         Some(self.grammar.first_set_of(idx, &mut std::collections::HashSet::new()))
+    }
+
+    fn run_streaming_building(
+        &self,
+        iter: Box<dyn Iterator<Item = Token<'static>>>,
+        ctx: &mut DiagnosticsContext,
+        profile: &ResolvedProfile,
+        recovery: &RecoveryConfig,
+        source_id: SourceId,
+    ) -> CstTree {
+        let source: Box<dyn TokenSource<'static> + 'static> =
+            Box::new(BufferedTokenSource::new(iter, 64));
+        let mut parse_ctx = ParseContext::new(source, ctx, profile, source_id);
+        let mut strategy = CstBuildingStrategy::new(source_id);
+        let mut recovery_steps = 0usize;
+        let start_expr = &self.grammar.exprs[self.grammar.start_idx];
+        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_skips);
+        strategy.finish()
+    }
+
+    fn run_streaming_collecting(
+        &self,
+        iter: Box<dyn Iterator<Item = Token<'static>>>,
+        ctx: &mut DiagnosticsContext,
+        profile: &ResolvedProfile,
+        recovery: &RecoveryConfig,
+        source_id: SourceId,
+        capacity_hint: usize,
+    ) -> Vec<ParseEvent> {
+        let source: Box<dyn TokenSource<'static> + 'static> =
+            Box::new(BufferedTokenSource::new(iter, 64));
+        let mut parse_ctx = ParseContext::new(source, ctx, profile, source_id);
+        let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
+        let mut recovery_steps = 0usize;
+        let start_expr = &self.grammar.exprs[self.grammar.start_idx];
+        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_skips);
+        strategy.finish()
     }
 }
 
@@ -305,6 +373,37 @@ impl CompiledParser {
         self.parse_fn.run(tokens, ctx, &self.profile, &self.recovery, source_id,
             &mut |event| strategy.on_event(event));
         strategy.finish()
+    }
+
+    /// Parse a streaming iterator of `'static` tokens and return a [`CstTree`].
+    ///
+    /// Tokens are consumed lazily via a [`BufferedTokenSource`], keeping memory
+    /// usage proportional to the active backtracking window instead of the full
+    /// token stream. Uses `SourceId(0)`.
+    ///
+    /// # Note on lifetimes
+    /// Streaming tokens must be `'static` because the iterator is boxed for
+    /// object-safety. For source-borrowed tokens use [`Self::parse_tree`].
+    pub fn parse_streaming(
+        &self,
+        iter: impl Iterator<Item = Token<'static>> + 'static,
+        ctx: &mut DiagnosticsContext,
+    ) -> CstTree {
+        self.parse_fn.run_streaming_building(
+            Box::new(iter), ctx, &self.profile, &self.recovery, SourceId(0),
+        )
+    }
+
+    /// Parse a streaming iterator of `'static` tokens and return a flat
+    /// `Vec<ParseEvent>`.
+    pub fn parse_streaming_events(
+        &self,
+        iter: impl Iterator<Item = Token<'static>> + 'static,
+        ctx: &mut DiagnosticsContext,
+    ) -> Vec<ParseEvent> {
+        self.parse_fn.run_streaming_collecting(
+            Box::new(iter), ctx, &self.profile, &self.recovery, SourceId(0), 64,
+        )
     }
 
     /// Build a stateful [`IncrementalParser`] backed by this compiled grammar.

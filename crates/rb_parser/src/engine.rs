@@ -1,4 +1,5 @@
 use rb_common::spans::DiagnosticLocation;
+use rb_tokenizer::token_source::TokenSource;
 use rb_tokenizer::tokens::Token;
 
 // ── ParseFailure ──────────────────────────────────────────────────────────────
@@ -132,33 +133,31 @@ pub enum RecoveryAction {
 
 /// The mutable parse state threaded through every combinator call.
 /// `!Send` — holds `&mut DiagnosticsContext`.
-pub struct ParseContext<'src> {
-    tokens: &'src [Token<'src>],
+pub struct ParseContext<'src, 'ctx> {
+    source: Box<dyn TokenSource<'src> + 'src>,
     /// The diagnostics accumulator for the current parse run.
-    pub ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
+    pub ctx: &'ctx mut rb_common::diagnostics::DiagnosticsContext,
     /// The language profile governing which rules are active.
-    pub profile: &'src crate::profiles::ResolvedProfile,
+    pub profile: &'ctx crate::profiles::ResolvedProfile,
     pub(crate) source_id: rb_common::spans::SourceId,
-    cursor: usize,
     committed_at: usize,
     pub(crate) rule_depth: u32,
 }
 
-impl<'src> ParseContext<'src> {
-    /// Constructs a new `ParseContext` from the given token slice, diagnostics context,
-    /// resolved profile, and source identity.
+impl<'src, 'ctx> ParseContext<'src, 'ctx> {
+    /// Constructs a new `ParseContext` from a boxed [`TokenSource`], diagnostics
+    /// context, resolved profile, and source identity.
     pub fn new(
-        tokens: &'src [Token<'src>],
-        ctx: &'src mut rb_common::diagnostics::DiagnosticsContext,
-        profile: &'src crate::profiles::ResolvedProfile,
+        source: Box<dyn TokenSource<'src> + 'src>,
+        ctx: &'ctx mut rb_common::diagnostics::DiagnosticsContext,
+        profile: &'ctx crate::profiles::ResolvedProfile,
         source_id: rb_common::spans::SourceId,
     ) -> Self {
         ParseContext {
-            tokens,
+            source,
             ctx,
             profile,
             source_id,
-            cursor: 0,
             committed_at: 0,
             rule_depth: 0,
         }
@@ -166,23 +165,28 @@ impl<'src> ParseContext<'src> {
 
     /// Returns the token at the current cursor position without advancing.
     pub fn peek(&self) -> Option<&Token<'src>> {
-        self.tokens.get(self.cursor)
+        self.source.peek(0)
     }
 
     /// Returns the token `offset` positions ahead of the cursor without advancing.
     pub fn peek_ahead(&self, offset: usize) -> Option<&Token<'src>> {
-        self.tokens.get(self.cursor + offset)
+        self.source.peek(offset)
+    }
+
+    /// Returns the token immediately before the current cursor, or `None`.
+    ///
+    /// Used by the engine to compute span ends for completed nodes.
+    pub fn peek_back(&self) -> Option<&Token<'src>> {
+        self.source.peek_back()
     }
 
     /// Consumes and returns the current token, advancing the cursor.
     pub fn advance(&mut self) -> Option<&Token<'src>> {
-        let tok = self.tokens.get(self.cursor);
-        if tok.is_some() { self.cursor += 1; }
-        tok
+        self.source.advance()
     }
 
     /// Returns the current cursor index (token position).
-    pub fn cursor(&self) -> usize { self.cursor }
+    pub fn cursor(&self) -> usize { self.source.position() }
 
     /// Resets cursor to `pos`. Panics in debug builds if `pos < committed_at`.
     pub fn reset_to(&mut self, pos: usize) {
@@ -191,13 +195,15 @@ impl<'src> ParseContext<'src> {
             "cannot backtrack across a committed point (committed_at={}, target={pos})",
             self.committed_at
         );
-        self.cursor = pos;
+        self.source.reset_to(pos);
     }
 
     /// Records the current cursor as a commitment boundary.
     pub fn commit(&mut self) {
-        if self.cursor > self.committed_at {
-            self.committed_at = self.cursor;
+        let pos = self.source.position();
+        if pos > self.committed_at {
+            self.committed_at = pos;
+            self.source.set_commit(pos);
         }
     }
 
@@ -208,7 +214,7 @@ impl<'src> ParseContext<'src> {
 
     /// Returns `true` if the cursor is past the last token.
     pub fn at_eof(&self) -> bool {
-        self.cursor >= self.tokens.len()
+        self.source.is_exhausted()
     }
 
     /// Returns the position of the most recent commitment boundary.
@@ -216,9 +222,9 @@ impl<'src> ParseContext<'src> {
 
     /// Current cursor position as a [`DiagnosticLocation`].
     pub fn location(&self) -> DiagnosticLocation {
-        if let Some(tok) = self.tokens.get(self.cursor) {
+        if let Some(tok) = self.source.peek(0) {
             DiagnosticLocation::real(tok.span)
-        } else if let Some(tok) = self.tokens.last() {
+        } else if let Some(tok) = self.source.last_token() {
             DiagnosticLocation::EndOfFile {
                 source_id: self.source_id,
                 at: tok.span.end,
@@ -230,7 +236,4 @@ impl<'src> ParseContext<'src> {
             }
         }
     }
-
-    /// Returns the underlying token slice.
-    pub fn tokens(&self) -> &[Token<'src>] { self.tokens }
 }

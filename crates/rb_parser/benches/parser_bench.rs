@@ -338,11 +338,28 @@ fn bench_parse_throughput(c: &mut Criterion) {
     for n in [100usize, 500, 2000] {
         let tokens = json_flat_array(n);
         g.throughput(Throughput::Elements(tokens.len() as u64));
+
+        // ── slice mode (pre-materialised Vec<Token>) ──────────────────────
         g.bench_with_input(BenchmarkId::new("array_len", n), &tokens, |b, toks| {
             b.iter(|| {
                 let mut ctx = DiagnosticsContext::new();
                 parser.parse_tree(toks, &mut ctx)
             })
+        });
+
+        // ── streaming mode (BufferedTokenSource via parse_streaming) ──────
+        // Setup clones the token vec so `tokens.into_iter()` is owned and
+        // `'static`; criterion's `iter_batched` excludes setup time from
+        // measurement, isolating the parse cost.
+        g.bench_with_input(BenchmarkId::new("streaming/array_len", n), &tokens, |b, toks| {
+            b.iter_batched(
+                || toks.clone(),
+                |owned| {
+                    let mut ctx = DiagnosticsContext::new();
+                    parser.parse_streaming(owned.into_iter(), &mut ctx)
+                },
+                criterion::BatchSize::SmallInput,
+            )
         });
     }
 
