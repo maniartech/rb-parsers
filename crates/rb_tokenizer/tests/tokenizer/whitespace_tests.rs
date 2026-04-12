@@ -6,7 +6,8 @@ fn get_whitespace_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Add simple scanners

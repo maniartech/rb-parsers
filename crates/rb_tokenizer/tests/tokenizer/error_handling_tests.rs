@@ -11,7 +11,8 @@ mod error_handling_tests {
             continue_on_error,
             error_tolerance_limit: error_limit,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
 
         let mut tokenizer = Tokenizer::with_config(config);
 

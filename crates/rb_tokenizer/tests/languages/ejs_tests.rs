@@ -6,7 +6,8 @@ fn get_ejs_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 10,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // HTML content fallback (adding this first so it has lowest priority)

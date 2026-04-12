@@ -9,7 +9,8 @@ fn get_js_style_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Add a double-quoted string scanner with JS-style escapes
@@ -167,7 +168,8 @@ fn get_html_style_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // HTML comments: <!-- ... --> — registered before the generic `<` tag scanner.
@@ -247,7 +249,8 @@ fn get_c_style_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // C-style string scanner
@@ -364,7 +367,8 @@ fn get_ruby_style_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Ruby double-quoted string with interpolation

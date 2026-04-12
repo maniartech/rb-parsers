@@ -7,7 +7,8 @@ fn get_json_tokenizer() -> Tokenizer {
         continue_on_error: false, // For JSON we want strict parsing
         error_tolerance_limit: 1,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Structural characters

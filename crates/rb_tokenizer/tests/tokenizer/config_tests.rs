@@ -23,7 +23,8 @@ mod config_tests {
             continue_on_error: false,
             error_tolerance_limit: 5,
             track_token_positions: false,
-        };
+            ..Default::default()
+    };
 
         let tokenizer = Tokenizer::with_config(custom_config);
         let config = tokenizer.config();
@@ -80,7 +81,8 @@ mod config_tests {
             continue_on_error: false,
             error_tolerance_limit: 7,
             track_token_positions: false,
-        };
+            ..Default::default()
+    };
 
         // Clone the config and verify it's equal
         let cloned_config = original_config.clone();
@@ -98,7 +100,8 @@ mod config_tests {
             continue_on_error: false,
             error_tolerance_limit: 3,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
 
         let debug_output = format!("{:?}", config);
 

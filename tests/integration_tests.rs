@@ -10,7 +10,8 @@ mod integration_tests {
             continue_on_error: false,
             error_tolerance_limit: 1,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
         let mut tokenizer = Tokenizer::with_config(config);
 
         tokenizer.add_symbol_scanner("{", "Brace", Some("OpenBrace"));

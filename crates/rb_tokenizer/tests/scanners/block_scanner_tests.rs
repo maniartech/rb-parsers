@@ -8,7 +8,8 @@ fn get_block_scanner_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Add block scanners for different use cases
@@ -72,7 +73,8 @@ fn get_enhanced_escape_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Add string scanner with enhanced escape handling
@@ -287,7 +289,8 @@ mod block_scanner_tests {
             continue_on_error: true,
             error_tolerance_limit: 5,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
         let mut tokenizer = Tokenizer::with_config(config);
 
         // Add block scanner that excludes delimiters
@@ -528,7 +531,8 @@ mod block_scanner_tests {
             continue_on_error: false,
             error_tolerance_limit: 1,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
         let mut tokenizer = Tokenizer::with_config(config);
 
         let mut string_scanner = BlockScanner::new(
@@ -566,7 +570,8 @@ mod block_scanner_tests {
             continue_on_error: false,
             error_tolerance_limit: 1,
             track_token_positions: true,
-        };
+            ..Default::default()
+    };
         let mut tokenizer = Tokenizer::with_config(config);
 
         let mut paragraph_scanner = BlockScanner::new(

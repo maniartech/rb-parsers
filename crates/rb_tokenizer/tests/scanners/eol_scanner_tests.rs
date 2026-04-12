@@ -8,7 +8,8 @@ fn get_eol_scanner_tokenizer() -> Tokenizer {
         continue_on_error: true,
         error_tolerance_limit: 5,
         track_token_positions: true,
-    };
+        ..Default::default()
+};
     let mut tokenizer = Tokenizer::with_config(config);
 
     // Add EOL scanners for different use cases
