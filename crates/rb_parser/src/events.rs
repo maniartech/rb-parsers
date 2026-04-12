@@ -16,28 +16,49 @@ use crate::engine::RecoveryAction;
 pub enum ParseEvent {
     /// A syntax node boundary has opened.
     NodeStart {
+        /// The syntactic category of the opening node.
         kind: SyntaxKind,
+        /// Source position at which this node begins.
         span_start: SourcePosition,
     },
     /// The previously opened node has closed.
     NodeEnd {
+        /// The syntactic category of the closed node.
         kind: SyntaxKind,
+        /// Full source span of the closed node.
         span: SourceSpan,
     },
     /// A leaf token was consumed.
     Token {
+        /// Scanner-assigned token type name.
         token_type: &'static str,
+        /// Optional sub-kind (from `tok_sub` combinators).
         token_sub_kind: Option<&'static str>,
+        /// Source span of this token.
         span: SourceSpan,
+        /// `true` for whitespace, comments, and other trivia.
         is_trivia: bool,
+        /// Field label if this token was inside a `field(…)` combinator.
         field_name: Option<&'static str>,
     },
     /// Named field boundary was entered.
-    FieldStart { name: &'static str },
+    FieldStart {
+        /// The field label, as declared in the grammar.
+        name: &'static str,
+    },
     /// Named field boundary was exited.
-    FieldEnd { name: &'static str },
+    FieldEnd {
+        /// The field label, matching the preceding `FieldStart`.
+        name: &'static str,
+    },
     /// A diagnostic was emitted at this point in the stream.
-    Error { diagnostic: Box<Diagnostic> },
+    Error {
+        /// The boxed diagnostic value.
+        diagnostic: Box<Diagnostic>,
+    },
     /// The engine applied a recovery action.
-    Recovery { action: RecoveryAction },
+    Recovery {
+        /// The recovery action that was taken.
+        action: RecoveryAction,
+    },
 }

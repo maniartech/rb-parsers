@@ -5,8 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# Enable serde Serialize/Deserialize derives on public types.
+serde = ["dep:serde", "rb_common/serde", "rb_tokenizer/serde"]
+
 [dependencies]
 indexmap = "2"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dependencies.rb_common]
 path = "../rb_common"

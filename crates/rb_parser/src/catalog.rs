@@ -2,20 +2,29 @@ use rb_common::catalog::{ErrorCode, ErrorSeverity, ErrorTemplate, StaticErrorCat
 
 // ── Namespace ──────────────────────────────────────────────────────────────────
 
+/// Error code namespace prefix for the `rb_parser` crate.
 pub const RBP_NAMESPACE: &str = "RBP";
 
-// ── Error code constants ───────────────────────────────────────────────────────
+// ── Error code constants ───────────────────────────────────────────────────
 
+/// Emitted when the parser encounters a token it did not expect.
 pub const RBP_UNEXPECTED_TOKEN:    ErrorCode = ErrorCode("RBP-unexpected-token");
+/// Emitted when a required token is absent from the input.
 pub const RBP_MISSING_TOKEN:       ErrorCode = ErrorCode("RBP-missing-token");
+/// Emitted when an opening delimiter is not matched by a closing one.
 pub const RBP_UNMATCHED_DELIMITER: ErrorCode = ErrorCode("RBP-unmatched-delimiter");
+/// Emitted when the error-recovery budget is exhausted.
 pub const RBP_RECOVERY_LIMIT:      ErrorCode = ErrorCode("RBP-recovery-limit");
+/// Emitted when a left-recursive grammar rule is detected at compile time.
 pub const RBP_LEFT_RECURSION:      ErrorCode = ErrorCode("RBP-left-recursion");
+/// Emitted when a grammar branch can never be reached.
 pub const RBP_UNREACHABLE_BRANCH:  ErrorCode = ErrorCode("RBP-unreachable-branch");
+/// Emitted when two or more profile-guarded branches are simultaneously active.
 pub const RBP_CONFLICTING_GUARDS:  ErrorCode = ErrorCode("RBP-conflicting-guards");
 
 // ── Template definitions ───────────────────────────────────────────────────────
 
+/// All `rb_parser` error templates, keyed by their [`ErrorCode`].
 pub static RBP_TEMPLATES: &[ErrorTemplate] = &[
     ErrorTemplate {
         code:             ErrorCode("RBP-unexpected-token"),
@@ -100,6 +109,7 @@ pub static RBP_TEMPLATES: &[ErrorTemplate] = &[
 
 // ── Catalog ────────────────────────────────────────────────────────────────────
 
+/// The complete static error catalog for `rb_parser`.
 pub static RBP_CATALOG: StaticErrorCatalog = StaticErrorCatalog {
     namespace: "RBP",
     templates: RBP_TEMPLATES,

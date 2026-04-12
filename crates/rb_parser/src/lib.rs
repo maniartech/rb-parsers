@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! `rb_parser` — a PEG combinator parser framework producing concrete syntax trees.
 //!
 //! # Quick start
@@ -23,13 +24,21 @@
 //! let tree = compiled.parse_tree(&tokens, &mut ctx);
 //! ```
 
+/// Error catalog — machine-readable codes for parser diagnostics.
 pub mod catalog;
+/// Concrete syntax tree — `CstTree`, `CstNode`, `CstToken`, `SyntaxKind`, and friends.
 pub mod cst;
+/// Parse engine — the recursive-descent driver that evaluates grammars.
 pub mod engine;
+/// Parse events — the low-level event stream produced during a parse.
 pub mod events;
+/// Grammar DSL — combinators and builders for defining grammars.
 pub mod grammar;
+/// Parsing profiles — language mode and recovery configuration.
 pub mod profiles;
+/// Parse strategies — output-determining callbacks (`CstBuildingStrategy`, etc.).
 pub mod strategy;
+/// Visitor API — tree walkers and event-based visitor types.
 pub mod visitors;
 
 use rb_common::diagnostics::DiagnosticsContext;
@@ -66,9 +75,10 @@ impl Clone for CompiledParser {
     }
 }
 
-// SAFETY: The parse function holds only `'static` grammar data.
-unsafe impl Send for CompiledParser {}
-unsafe impl Sync for CompiledParser {}
+// `CompiledParser` is `Send + Sync` automatically because:
+// - `parse_fn: Arc<dyn ParseFn>` where `ParseFn: Send + Sync`
+// - `profile` and `recovery` are `Send + Sync`
+// The manual unsafe impls below are removed — the compiler now verifies this.
 
 /// Type-erased parse function: executes the grammar over a token stream,
 /// pushing events into a `FnMut(ParseEvent)` callback.
@@ -108,6 +118,17 @@ trait ParseFn: Send + Sync {
         source_id: SourceId,
         capacity_hint: usize,
     ) -> Vec<ParseEvent>;
+
+    /// Returns all rule names registered in the grammar (in definition order).
+    fn rule_names(&self) -> Vec<String>;
+
+    /// Returns the FIRST set of the start rule — the set of token types that
+    /// can legitimately begin a parse.
+    fn first_set_start(&self) -> std::collections::HashSet<&'static str>;
+
+    /// Returns the FIRST set of the rule with the given name, or `None` if the
+    /// rule does not exist. This is the set of token types that can start the rule.
+    fn first_set_named(&self, rule_name: &str) -> Option<std::collections::HashSet<&'static str>>;
 }
 
 struct GrammarParseFn<R: RuleId> {
@@ -136,7 +157,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         let mut recovery_steps = 0usize;
 
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
-        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_steps);
+        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_skips);
     }
 
     fn run_building(
@@ -151,7 +172,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         let mut strategy = CstBuildingStrategy::new(source_id);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
-        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_steps);
+        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_skips);
         strategy.finish()
     }
 
@@ -168,8 +189,21 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
         let mut recovery_steps = 0usize;
         let start_expr = &self.grammar.exprs[self.grammar.start_idx];
-        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_steps);
+        let _ = eval(start_expr, &mut parse_ctx, &self.grammar, &mut strategy, None, &mut recovery_steps, recovery.max_recovery_skips);
         strategy.finish()
+    }
+
+    fn rule_names(&self) -> Vec<String> {
+        self.grammar.rule_names.iter().cloned().collect()
+    }
+
+    fn first_set_start(&self) -> std::collections::HashSet<&'static str> {
+        self.grammar.first_set_of(self.grammar.start_idx, &mut std::collections::HashSet::new())
+    }
+
+    fn first_set_named(&self, rule_name: &str) -> Option<std::collections::HashSet<&'static str>> {
+        let idx = self.grammar.rule_names.iter().position(|n| n == rule_name)?;
+        Some(self.grammar.first_set_of(idx, &mut std::collections::HashSet::new()))
     }
 }
 
@@ -185,6 +219,31 @@ impl CompiledParser {
             profile,
             recovery,
         }
+    }
+
+    /// Replace the recovery configuration. Returns `self` for chaining.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let parser = grammar.compile(&profile)?.with_recovery(RecoveryConfig::fail_fast());
+    /// ```
+    pub fn with_recovery(mut self, config: RecoveryConfig) -> Self {
+        self.recovery = config;
+        self
+    }
+
+    /// Set the maximum number of tokens the engine may skip in a single recovery
+    /// step. Returns `self` for chaining.
+    pub fn with_max_recovery_skips(mut self, skips: usize) -> Self {
+        self.recovery.max_recovery_skips = skips;
+        self
+    }
+
+    /// Set the maximum total error count before the engine stops attempting
+    /// recovery. `0` means no limit. Returns `self` for chaining.
+    pub fn with_max_errors(mut self, max: usize) -> Self {
+        self.recovery.max_errors = max;
+        self
     }
 
     /// Parse a token stream and return a [`CstTree`].
@@ -252,16 +311,47 @@ impl CompiledParser {
     pub fn incremental(&self) -> IncrementalParser<'_> {
         IncrementalParser { compiled: self, cached_tree: None }
     }
+
+    // ── Grammar introspection ─────────────────────────────────────────────────
+
+    /// Returns the names of all rules in the grammar (in definition order).
+    ///
+    /// Useful for grammar testing ("does this rule exist?") and tooling
+    /// (document-symbol providers, grammar visualisers).
+    pub fn rule_names(&self) -> Vec<String> {
+        self.parse_fn.rule_names()
+    }
+
+    /// Returns the FIRST set of the start rule — the token types that can
+    /// legitimately begin a top-level parse.
+    ///
+    /// **Note**: For PEG grammars the FIRST set is an *approximation*. In
+    /// particular, `Opt`/`Repeat0` rules are always considered nullable which
+    /// can produce a superset of the true FIRST set.
+    pub fn first_set_start(&self) -> std::collections::HashSet<&'static str> {
+        self.parse_fn.first_set_start()
+    }
+
+    /// Returns the FIRST set of the named rule, or `None` if the rule does
+    /// not exist in the grammar.
+    ///
+    /// See [`Self::first_set_start`] for the caveats.
+    pub fn first_set_of(&self, rule_name: &str) -> Option<std::collections::HashSet<&'static str>> {
+        self.parse_fn.first_set_named(rule_name)
+    }
 }
 
 // ── IncrementalParser ─────────────────────────────────────────────────────────
 
+/// A thin wrapper around a [`CompiledParser`] that caches the most-recently
+/// produced [`CstTree`] and exposes a `reparse` API for incremental workflows.
 pub struct IncrementalParser<'compiled> {
     compiled: &'compiled CompiledParser,
     cached_tree: Option<CstTree>,
 }
 
 impl<'compiled> IncrementalParser<'compiled> {
+    /// Performs the initial full parse and stores the result in the cache.
     pub fn initial_parse(
         &mut self,
         tokens: &[Token<'_>],
@@ -287,10 +377,12 @@ impl<'compiled> IncrementalParser<'compiled> {
         self.initial_parse(tokens, ctx)
     }
 
+    /// Clears the cached tree, freeing its memory.
     pub fn invalidate(&mut self) {
         self.cached_tree = None;
     }
 
+    /// Returns the cached tree from the most recent parse, if any.
     pub fn cached_tree(&self) -> Option<&CstTree> {
         self.cached_tree.as_ref()
     }
@@ -298,19 +390,27 @@ impl<'compiled> IncrementalParser<'compiled> {
 
 // ── TextEdit ──────────────────────────────────────────────────────────────────
 
+/// A description of a text change applied to a source file.
+///
+/// Used with [`IncrementalParser::reparse`] to communicate edit regions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEdit {
+    /// The byte-offset range of the text that was removed or replaced.
     pub range: std::ops::Range<usize>,
+    /// The text that replaces the range (empty string for a deletion).
     pub replacement: String,
 }
 
 impl TextEdit {
+    /// Creates a zero-width insertion at byte offset `at`.
     pub fn insert(at: usize, text: impl Into<String>) -> Self {
         TextEdit { range: at..at, replacement: text.into() }
     }
+    /// Creates a deletion over `range`.
     pub fn delete(range: std::ops::Range<usize>) -> Self {
         TextEdit { range, replacement: String::new() }
     }
+    /// Creates a replacement over `range`.
     pub fn replace(range: std::ops::Range<usize>, text: impl Into<String>) -> Self {
         TextEdit { range, replacement: text.into() }
     }
@@ -318,6 +418,10 @@ impl TextEdit {
 
 // ── Prelude ───────────────────────────────────────────────────────────────────
 
+/// Convenience re-exports for the most commonly used grammar, CST, and profile types.
+///
+/// A typical grammar module can `use rb_parser::prelude::*` to bring everything needed
+/// into scope without explicit qualified imports.
 pub mod prelude {
     pub use crate::grammar::{
         GrammarRule, RuleId, RecoveryLandmarks, GrammarError,
@@ -326,6 +430,6 @@ pub mod prelude {
         PrattBuilder, GrammarBuilder, Grammar,
     };
     pub use crate::cst::SyntaxKind;
-    pub use crate::profiles::{ResolvedProfile, ProfileMode, profile_guard, profile};
+    pub use crate::profiles::{ResolvedProfile, ProfileMode, profile_guard, profile, ProfileCatalog};
     pub use crate::{seq, one_of, any_of};
 }
