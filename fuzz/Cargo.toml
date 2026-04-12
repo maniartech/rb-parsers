@@ -1,0 +1,29 @@
+[package]
+name = "rb-parsers-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# cargo-fuzz sets the workspace root to `fuzz/` — exclude from the parent workspace.
+[workspace]
+
+[[bin]]
+name = "tokenizer"
+path = "fuzz_targets/tokenizer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rb_tokenizer = { path = "../crates/rb_tokenizer" }
+rb_parser    = { path = "../crates/rb_parser" }
+rb_common    = { path = "../crates/rb_common" }
+
+[profile.release]
+debug = 1          # keep symbol names in crash traces

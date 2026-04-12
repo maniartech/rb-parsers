@@ -1,0 +1,75 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Criterion benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-
+
+      # On the main / master branch we save a tagged baseline called "main".
+      # On PRs we compare the current run against that baseline and fail
+      # if any benchmark is more than 120 % slower than the baseline.
+      - name: Run benchmarks (save baseline on default branch)
+        if: github.event_name == 'push'
+        run: |
+          cargo bench --workspace \
+            -- --output-format=bencher \
+            --save-baseline main \
+            2>&1 | tee benchmark-results.txt
+
+      - name: Run benchmarks (compare against baseline on PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo bench --workspace \
+            -- --output-format=bencher \
+            --baseline main \
+            2>&1 | tee benchmark-results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results.txt
+
+      # Optional: publish results to GitHub Pages / gh-pages via
+      # benchmark-action/github-action-benchmark. Requires the repo to have
+      # GitHub Pages enabled and a `gh-pages` branch.
+      - name: Store & compare benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: always()
+        with:
+          tool: cargo
+          output-file-path: benchmark-results.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Warn in PR comments when regression exceeds 110 %; fail at 120 %.
+          alert-threshold: "120%"
+          comment-on-alert: true
+          fail-on-alert: ${{ github.event_name == 'pull_request' }}
+          # Save the baseline on the default branch automatically.
+          save-data-file: ${{ github.event_name == 'push' }}
+          benchmark-data-dir-path: docs/benchmark-history
