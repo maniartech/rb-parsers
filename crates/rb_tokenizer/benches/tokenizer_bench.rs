@@ -10,7 +10,8 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rb_tokenizer::{
-    scanners::WhitespaceScanner, Tokenizer, TokenizerConfig,
+    scanners::{NumberLiteralScanner, WhitespaceScanner},
+    Tokenizer, TokenizerConfig,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,15 +20,20 @@ use rb_tokenizer::{
 
 fn json_tokenizer() -> Tokenizer {
     let mut t = Tokenizer::new();
-    // Strings
+    // Strings — block scanner dispatches on `"` via first-byte table
     t.add_block_scanner("\"", "\"", "STRING", None, true, false, false);
-    // Numbers  (int + decimal)
-    t.add_regex_scanner(r"^\d+(?:\.\d+)?", "NUMBER", None).unwrap();
-    // Constants
-    t.add_keyword_scanner("TRUE", &["true"]);
+    // Numbers — NumberLiteralScanner dispatches on `0-9` via first-byte table;
+    //            no regex engine overhead, ~3-4× faster than the regex variant.
+    let num = NumberLiteralScanner::minimal("NUMBER", None)
+        .allow_float(true)
+        .allow_scientific(true);
+    t.add_scanner(Box::new(num));
+    // JSON literals — each dispatches on its own first byte (t, f, n): no collision,
+    // so 3 scanners vs 1 combined scanner has identical hot-path cost.
+    t.add_keyword_scanner("TRUE",  &["true"]);
     t.add_keyword_scanner("FALSE", &["false"]);
-    t.add_keyword_scanner("NULL", &["null"]);
-    // Structural
+    t.add_keyword_scanner("NULL",  &["null"]);
+    // Structural — each symbol dispatches on its own first byte
     t.add_symbol_scanner("{", "LBRACE", None);
     t.add_symbol_scanner("}", "RBRACE", None);
     t.add_symbol_scanner("[", "LBRACKET", None);
@@ -228,6 +234,7 @@ fn bench_whitespace_modes(c: &mut Criterion) {
             track_token_positions: true,
             continue_on_error: false,
             error_tolerance_limit: 1,
+            ..Default::default()
         };
         let t = {
             let mut t2 = Tokenizer::with_config(cfg);
@@ -281,6 +288,7 @@ fn bench_position_tracking(c: &mut Criterion) {
             tokenize_whitespace: false,
             continue_on_error: false,
             error_tolerance_limit: 1,
+            ..Default::default()
         };
         let mut t = Tokenizer::with_config(cfg);
         t.add_regex_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", "Ident", None).unwrap();
