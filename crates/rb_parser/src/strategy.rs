@@ -2,8 +2,11 @@ use crate::events::ParseEvent;
 
 /// Push-model consumer of `ParseEvent`s.
 pub trait ParseStrategy: Sized {
+    /// The value produced when the parse is complete.
     type Output;
+    /// Receives the next event from the parse engine.
     fn on_event(&mut self, event: ParseEvent);
+    /// Called once parsing is finished; consumes `self` and returns the output.
     fn finish(self) -> Self::Output;
 }
 
@@ -15,6 +18,7 @@ use crate::cst::{
     SyntaxNodeId, SyntaxTokenId,
 };
 
+/// A [`ParseStrategy`] that builds a [`CstTree`] from the event stream.
 pub struct CstBuildingStrategy {
     source_id: SourceId,
     nodes: Vec<CstNode>,
@@ -36,6 +40,7 @@ pub struct CstBuildingStrategy {
 }
 
 impl CstBuildingStrategy {
+    /// Creates a new strategy for the given `source_id`.
     pub fn new(source_id: SourceId) -> Self {
         CstBuildingStrategy {
             source_id,
@@ -143,11 +148,13 @@ impl ParseStrategy for CstBuildingStrategy {
 
 // ── EventCollectingStrategy ───────────────────────────────────────────────────
 
+/// A [`ParseStrategy`] that simply collects all events into a `Vec<ParseEvent>`.
 pub struct EventCollectingStrategy {
     events: Vec<ParseEvent>,
 }
 
 impl EventCollectingStrategy {
+    /// Creates a new strategy with an empty event buffer.
     pub fn new() -> Self { EventCollectingStrategy { events: Vec::new() } }
 
     /// Pre-allocate for `capacity` events to avoid reallocation during parsing.
