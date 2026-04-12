@@ -39,6 +39,7 @@ use std::borrow::Cow;
 /// ```
 ///
 /// [`KeywordScanner`]: crate::scanners::KeywordScanner
+#[derive(Clone)]
 pub struct OperatorScanner {
     /// `(operator_text, token_sub_type)`, sorted longest-first.
     entries: Vec<(String, Option<&'static str>)>,

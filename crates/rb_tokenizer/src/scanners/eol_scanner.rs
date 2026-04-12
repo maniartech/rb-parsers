@@ -6,14 +6,20 @@ use std::borrow::Cow;
 /// `EolScanner` implementation for parsing structures that start with a specific delimiter
 /// and continue until the end of line. This scanner handles structures like line comments,
 /// preprocessor directives, and other line-oriented syntax.
+#[derive(Clone)]
 pub struct EolScanner {
+    /// The opening delimiter that triggers this scanner (e.g. `//` for a line comment).
     pub delimiter: String,
+    /// The token type label assigned to every match.
     pub token_type: &'static str,
+    /// Optional sub-type for finer-grained token classification.
     pub token_sub_type: Option<&'static str>,
+    /// Whether the delimiter itself is included in the emitted token value.
     pub include_delimiter: bool,
 }
 
 impl EolScanner {
+    /// Creates a new `EolScanner` with the given delimiter and configuration.
     pub fn new(
         delimiter: &str,
         token_type: &'static str,

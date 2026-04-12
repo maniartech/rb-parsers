@@ -5,10 +5,16 @@ use super::scanner::AcceptStrategy;
 use regex::Regex;
 use std::borrow::Cow;
 
+/// A scanner that matches tokens using a compiled regular expression.
+#[derive(Clone)]
 pub struct RegexScanner {
+    /// The compiled regular expression used to match tokens.
     pub pattern: Regex,
+    /// The token type label assigned to every match.
     pub token_type: &'static str,
+    /// Optional sub-type for finer-grained token classification.
     pub token_sub_type: Option<&'static str>,
+    /// Optional accept hint for first-byte dispatch.
     pub accept_strategy: Option<AcceptStrategy>,
 }
 
@@ -25,6 +31,10 @@ impl RegexScanner {
         }
     }
 
+    /// Creates a `RegexScanner` that matches `pattern` and labels matches as `token_type`.
+    ///
+    /// The pattern is automatically anchored to the start of the input (`^`) if not
+    /// already anchored. An error is returned if the pattern is invalid.
     pub fn new(pattern: &str, token_type: &'static str, token_sub_type: Option<&'static str>) -> Result<Self, TokenizationError> {
         let normalized_pattern = Self::normalize_pattern(pattern);
 
@@ -39,6 +49,7 @@ impl RegexScanner {
         })
     }
 
+    /// Creates a `RegexScanner` with an explicit [`AcceptStrategy`] for first-byte dispatch.
     pub fn with_accept_strategy(pattern: &str, token_type: &'static str, token_sub_type: Option<&'static str>, accept_strategy: AcceptStrategy) -> Result<Self, TokenizationError> {
         let normalized_pattern = Self::normalize_pattern(pattern);
 

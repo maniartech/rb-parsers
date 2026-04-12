@@ -14,13 +14,24 @@ use super::symbol_scanner::SymbolScanner;
 use super::whitespace_scanner::WhitespaceScanner;
 use super::{ClosureScanner, Scanner};
 
+/// The concrete scanner variant stored in `Tokenizer::scanners`.
+///
+/// Each arm wraps a specific scanner implementation. The `Tokenizer` dispatches
+/// to the appropriate variant based on the first-byte dispatch table.
 pub enum ScannerType {
+    /// A literal symbol scanner (`SymbolScanner`).
     Symbol(SymbolScanner),
+    /// A regex-backed scanner (`RegexScanner`).
     Regex(RegexScanner),
+    /// A delimited block scanner (`BlockScanner`).
     Block(BlockScanner),
+    /// An end-of-line scanner (`EolScanner`).
     Eol(EolScanner),
+    /// A closure-backed scanner (`ClosureScanner`).
     Closure(ClosureScanner),
+    /// An arbitrary boxed `Scanner` implementation.
     Scanner(Box<dyn Scanner>),
+    /// An arbitrary boxed `CallbackScanner` implementation.
     Callback(Box<dyn CallbackScanner>),
     /// Keywords with automatic word-boundary checking.
     Keyword(KeywordScanner),
@@ -37,9 +48,15 @@ pub enum ScannerType {
     Whitespace(WhitespaceScanner),
 }
 
+/// A scanner variant that receives the raw input string and returns an optional token.
+///
+/// Unlike [`Scanner`], this trait has no access to context. It is used when you need
+/// a simple callback with full control over token construction.
 pub trait CallbackScanner {
+    /// Scans `input` and returns the first matching token, or `None` if no match.
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError>;
 
+    /// Like `scan` but returns a [`ScanMatch`] carrying the exact consumed byte length.
     fn scan_with_context<'i>(&self, input: &'i str) -> Result<Option<ScanMatch<'i>>, TokenizationError> {
         self.scan(input).map(|result| {
             result.map(|token| ScanMatch {
@@ -47,6 +64,12 @@ pub trait CallbackScanner {
                 token,
             })
         })
+    }
+
+    /// Clone into a boxed trait object. Panics by default.
+    fn clone_box(&self) -> Box<dyn CallbackScanner> {
+        panic!("CallbackScanner::clone_box() not implemented. \
+               Override it to support Tokenizer::clone().")
     }
 }
 
@@ -125,6 +148,28 @@ impl ScannerType {
         match self {
             ScannerType::Contextual(scanner) => scanner.scan_into_match(input, ctx),
             _ => self.scan_with_context(input),
+        }
+    }
+}
+
+impl Clone for ScannerType {
+    fn clone(&self) -> Self {
+        match self {
+            ScannerType::Symbol(s)        => ScannerType::Symbol(s.clone()),
+            ScannerType::Regex(s)         => ScannerType::Regex(s.clone()),
+            ScannerType::Block(s)         => ScannerType::Block(s.clone()),
+            ScannerType::Eol(s)           => ScannerType::Eol(s.clone()),
+            ScannerType::Closure(s)       => ScannerType::Closure(s.clone()),
+            ScannerType::Keyword(s)       => ScannerType::Keyword(s.clone()),
+            ScannerType::CharClass(s)     => ScannerType::CharClass(s.clone()),
+            ScannerType::NumberLiteral(s) => ScannerType::NumberLiteral(s.clone()),
+            ScannerType::Operator(s)      => ScannerType::Operator(s.clone()),
+            ScannerType::Whitespace(s)    => ScannerType::Whitespace(s.clone()),
+            // `Box<dyn Scanner/CallbackScanner/ContextualScanner>` — delegate to clone_box().
+            // This panics at runtime if the concrete type hasn't overridden clone_box().
+            ScannerType::Scanner(s)    => ScannerType::Scanner(s.clone_box()),
+            ScannerType::Callback(s)   => ScannerType::Callback(s.clone_box()),
+            ScannerType::Contextual(s) => ScannerType::Contextual(s.clone_box()),
         }
     }
 }

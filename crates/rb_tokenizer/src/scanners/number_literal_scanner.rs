@@ -40,8 +40,11 @@ use std::borrow::Cow;
 ///     .allow_scientific(true)
 ///     .allow_leading_dot(true);
 /// ```
+#[derive(Clone)]
 pub struct NumberLiteralScanner {
+    /// The token type label assigned to every matched number.
     pub token_type:     &'static str,
+    /// Optional sub-type for finer-grained classification (e.g. integer vs float).
     pub token_sub_type: Option<&'static str>,
 
     /// Allow decimal point and fractional part (e.g. `1.5`).
@@ -96,12 +99,19 @@ impl NumberLiteralScanner {
 
     // ── Builder ───────────────────────────────────────────────────────────────
 
+    /// Enables or disables float parsing (decimal point + fractional part).
     pub fn allow_float(mut self, v: bool) -> Self        { self.allow_float        = v; self }
+    /// Enables or disables hexadecimal (`0x`/`0X`) prefix parsing.
     pub fn allow_hex(mut self, v: bool) -> Self          { self.allow_hex          = v; self }
+    /// Enables or disables binary (`0b`/`0B`) prefix parsing.
     pub fn allow_binary(mut self, v: bool) -> Self       { self.allow_binary       = v; self }
+    /// Enables or disables octal (`0o`/`0O`) prefix parsing.
     pub fn allow_octal(mut self, v: bool) -> Self        { self.allow_octal        = v; self }
+    /// Enables or disables scientific notation (`e`/`E`) suffix parsing.
     pub fn allow_scientific(mut self, v: bool) -> Self   { self.allow_scientific   = v; self }
+    /// Enables or disables `_` digit-group separators (`1_000_000`).
     pub fn allow_underscores(mut self, v: bool) -> Self  { self.allow_underscores  = v; self }
+    /// Enables or disables leading-dot floats (`.5`).
     pub fn allow_leading_dot(mut self, v: bool) -> Self  { self.allow_leading_dot  = v; self }
 }
 

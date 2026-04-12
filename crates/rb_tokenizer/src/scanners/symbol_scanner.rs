@@ -2,13 +2,19 @@ use super::scanner::Scanner;
 use crate::tokens::{Token, TokenizationError, SourceSpan};
 use std::borrow::Cow;
 
+/// A scanner that matches an exact literal symbol (e.g. `+`, `->`, `//`).
+#[derive(Clone)]
 pub struct SymbolScanner {
+    /// The exact string this scanner matches.
     pub symbol: String,
+    /// The token type label assigned on a match.
     pub token_type: &'static str,
+    /// Optional sub-type for finer-grained classification.
     pub token_sub_type: Option<&'static str>,
 }
 
 impl SymbolScanner {
+    /// Creates a `SymbolScanner` that matches `symbol` and labels tokens as `token_type`.
     pub fn new(symbol: &str, token_type: &'static str, token_sub_type: Option<&'static str>) -> Self {
         Self {
             symbol: symbol.to_string(),

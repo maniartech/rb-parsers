@@ -76,6 +76,7 @@ pub struct IndentationScanner {
 }
 
 impl IndentationScanner {
+    /// Creates a new `IndentationScanner` with the given token type labels.
     pub fn new(indent_token_type: &'static str, dedent_token_type: &'static str) -> Self {
         Self {
             indent_token_type,

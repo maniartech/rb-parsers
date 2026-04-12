@@ -62,6 +62,7 @@ pub struct BinaryTokenizer {
 }
 
 impl BinaryTokenizer {
+    /// Creates a `BinaryTokenizer` with default configuration.
     pub fn new() -> Self {
         Self::default()
     }

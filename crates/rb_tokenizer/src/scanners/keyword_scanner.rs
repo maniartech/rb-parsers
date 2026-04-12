@@ -42,6 +42,7 @@ use std::borrow::Cow;
 /// let scanner = KeywordScanner::new("Keyword", &["def", "end"])
 ///     .with_word_boundary(|c| c.is_alphanumeric() || c == '_' || c == '?' || c == '!');
 /// ```
+#[derive(Clone)]
 pub struct KeywordScanner {
     /// `(keyword_text, token_sub_type)`, sorted longest-first.
     entries: Vec<(String, Option<&'static str>)>,

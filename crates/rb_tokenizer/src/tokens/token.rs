@@ -10,8 +10,13 @@ use std::borrow::Cow;
 /// allocation**. Scanners that decode escape sequences or otherwise transform
 /// the matched text use [`Cow::Owned`].
 #[derive(Debug, PartialEq, Clone)]
+// Contains &'static str fields (token_type, token_sub_type) — serialize only.
+// Deserialize requires interning; use Token::from_owned() variants for round-tripping.
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Token<'src> {
+    /// The primary token classification (e.g. `"INT"`, `"IDENT"`).
     pub token_type: &'static str,
+    /// Optional sub-classification for finer-grained token categories.
     pub token_sub_type: Option<&'static str>,
     /// The lexed text. Borrows from the source input wherever possible.
     pub value: Cow<'src, str>,

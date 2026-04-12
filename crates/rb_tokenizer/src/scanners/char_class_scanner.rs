@@ -13,6 +13,7 @@ use std::borrow::Cow;
 /// - `a-zA-Z0-9_` — combination of ranges and literals
 ///
 /// A lone `-` (first or last character in the spec) is treated as a literal hyphen.
+#[derive(Clone)]
 struct CharClass {
     ranges:  Vec<(char, char)>,
     singles: Vec<char>,
@@ -89,6 +90,7 @@ impl CharClass {
 ///     None,
 /// );
 /// ```
+#[derive(Clone)]
 pub struct CharClassScanner {
     lead:         CharClass,
     continuation: Option<CharClass>,

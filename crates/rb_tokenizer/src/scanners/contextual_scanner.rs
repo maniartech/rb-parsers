@@ -55,6 +55,10 @@ use super::scanner::ScanMatch;
 /// for position- or history-dependent decisions — for example, Python-style
 /// significant indentation.
 pub trait ContextualScanner: Send + Sync {
+    /// Scans `input` with access to the mutable [`ScanContext`].
+    ///
+    /// Returns `Ok(Some(token))` on a match, `Ok(None)` if this scanner does not
+    /// match, or `Err(e)` on a hard tokenization error.
     fn scan<'i>(&self, input: &'i str, ctx: &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError>;
 
     /// Like `scan` but returns a [`ScanMatch`] that separates the emitted [`Token`]
@@ -72,6 +76,12 @@ pub trait ContextualScanner: Send + Sync {
             token,
         }))
     }
+
+    /// Clone into a boxed trait object. Panics by default.
+    fn clone_box(&self) -> Box<dyn ContextualScanner> {
+        panic!("ContextualScanner::clone_box() not implemented. \
+               Override it to support Tokenizer::clone().")
+    }
 }
 
 /// Wraps a closure into a [`ContextualScanner`].
@@ -81,11 +91,13 @@ pub trait ContextualScanner: Send + Sync {
 type ContextualScannerFn =
     dyn for<'i> Fn(&'i str, &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError> + Send + Sync;
 
+/// A [`ContextualScanner`] backed by an arbitrary boxed closure.
 pub struct ContextualClosureScanner {
     cb: Box<ContextualScannerFn>,
 }
 
 impl ContextualClosureScanner {
+    /// Creates a `ContextualClosureScanner` from the given closure.
     pub fn new(
         cb: impl for<'i> Fn(&'i str, &mut ScanContext) -> Result<Option<Token<'i>>, TokenizationError>
             + Send

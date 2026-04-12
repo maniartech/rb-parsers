@@ -1,19 +1,36 @@
+/// Binary (byte-level) scanner.
 pub mod binary_scanner;
+/// Delimited block scanner (e.g., multi-line strings).
 pub mod block_scanner;
+/// Character-class set scanner.
 pub mod char_class_scanner;
+/// Closure-backed custom scanner.
 pub mod closure_scanner;
+/// Context-sensitive scanner combinators.
 pub mod contextual_scanner;
+/// End-of-line scanner.
 pub mod eol_scanner;
+/// Indentation-sensitive scanner.
 pub mod indentation_scanner;
+/// Keyword / reserved-word scanner.
 pub mod keyword_scanner;
+/// Numeric literal scanner.
 pub mod number_literal_scanner;
+/// Operator and punctuation scanner.
 pub mod operator_scanner;
+/// Regex-backed scanner.
 pub mod regex_scanner;
+/// Scan-context type for context-sensitive tokenization.
 pub mod scan_context;
+/// Core `Scanner` trait definition.
 pub mod scanner;
+/// Supporting types used by scanner implementations.
 pub mod scanner_types;
+/// Symbol / identifier scanner.
 pub mod symbol_scanner;
+/// Whitespace scanner.
 pub mod whitespace_scanner;
+/// Word-boundary definitions used by scanners.
 pub mod word_boundary;
 
 pub use binary_scanner::BinaryScanner;

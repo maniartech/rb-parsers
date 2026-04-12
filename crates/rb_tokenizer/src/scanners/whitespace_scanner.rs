@@ -36,6 +36,7 @@ use std::borrow::Cow;
 /// All three forms — `\n`, `\r\n`, and bare `\r` — are recognised as one
 /// logical newline boundary.  The original bytes are preserved in
 /// `Token::value`.
+#[derive(Clone)]
 pub struct WhitespaceScanner {
     /// Token type for horizontal whitespace (` `, `\t`).
     ///

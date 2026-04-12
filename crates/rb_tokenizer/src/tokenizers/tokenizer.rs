@@ -11,12 +11,27 @@ use rb_common::spans::{SourceId, SourcePosition, SourceSpan};
 use std::borrow::Cow;
 use std::cell::RefCell;
 
+/// Configuration knobs for a [`Tokenizer`] instance.
 #[derive(Debug, Clone)]
 pub struct TokenizerConfig {
+    /// Emit whitespace tokens rather than silently skipping them.
     pub tokenize_whitespace: bool,
+    /// Continue tokenizing after a scan error rather than stopping immediately.
     pub continue_on_error: bool,
+    /// Maximum number of errors to accumulate before aborting (when `continue_on_error`).
     pub error_tolerance_limit: usize,
-    pub track_token_positions: bool,        // Controls whether line/column tracking is performed
+    /// Controls whether line/column tracking is performed.
+    pub track_token_positions: bool,
+    /// Token types in this set are **matched** (input is consumed) but never emitted.
+    /// Useful for discarding trivia (whitespace, comments, shebangs) so the parser
+    /// never sees them.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let mut cfg = TokenizerConfig::default();
+    /// cfg.drop_token_types(["Whitespace", "LineComment", "BlockComment"]);
+    /// ```
+    pub drop_token_types: std::collections::HashSet<&'static str>,
 }
 
 impl Default for TokenizerConfig {
@@ -26,10 +41,26 @@ impl Default for TokenizerConfig {
             continue_on_error: false,
             error_tolerance_limit: 10,
             track_token_positions: true,     // Default to tracking positions
+            drop_token_types: std::collections::HashSet::new(),
         }
     }
 }
 
+impl TokenizerConfig {
+    /// Convenience builder: mark a list of token types to be silently dropped.
+    /// Returns `&mut Self` for chaining.
+    pub fn drop_trivia(&mut self, types: impl IntoIterator<Item = &'static str>) -> &mut Self {
+        self.drop_token_types.extend(types);
+        self
+    }
+}
+
+/// A tokenizer that splits input source text into a stream of [`Token`]s.
+///
+/// Cloning a `Tokenizer` clones all registered scanners. Most built-in scanner
+/// types support this; closure-based scanners (`add_closure_scanner`) will panic
+/// at clone-time. Use a named struct implementing [`Scanner`] to support cloning.
+#[derive(Clone)]
 pub struct Tokenizer {
     scanners: Vec<ScannerType>,
     config: TokenizerConfig,
@@ -67,6 +98,7 @@ impl Tokenizer {
         }
     }
 
+    /// Creates a `Tokenizer` with the default config.
     pub fn new() -> Self {
         Tokenizer {
             scanners: Vec::new(),
@@ -78,6 +110,7 @@ impl Tokenizer {
         }
     }
 
+    /// Creates a `Tokenizer` with a custom `config`.
     pub fn with_config(config: TokenizerConfig) -> Self {
         Tokenizer {
             scanners: Vec::new(),
@@ -142,10 +175,12 @@ impl Tokenizer {
         self
     }
 
+    /// Returns a shared reference to this tokenizer's config.
     pub fn config(&self) -> &TokenizerConfig {
         &self.config
     }
 
+    /// Returns a mutable reference to this tokenizer's config.
     pub fn config_mut(&mut self) -> &mut TokenizerConfig {
         &mut self.config
     }
@@ -155,10 +190,28 @@ impl Tokenizer {
         self.last_errors.borrow().clone()
     }
 
+    /// Registers a scanner with no special dispatch position.
     pub fn add_scanner(&mut self, scanner: Box<dyn scanners::Scanner>) {
         self.push_scanner(ScannerType::Scanner(scanner));
     }
 
+    /// Register a scanner at an explicit position in the dispatch order.
+    ///
+    /// `priority` is a **0-based index** into the scanner list: `0` means the scanner
+    /// is tried *first* on every input position (highest priority); a value equal to
+    /// or greater than the current scanner count appends it at the end (same as
+    /// [`add_scanner`](Self::add_scanner)).
+    ///
+    /// Scanners registered without an explicit priority (via any other `add_*` method)
+    /// are appended in registration order. Among scanners at the same effective index,
+    /// the one registered first wins.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Ensure the keyword scanner is tried before the identifier scanner.
+    /// tokenizer.add_char_class_scanner("a-zA-Z_", Some("a-zA-Z0-9_"), "Ident", None);
+    /// tokenizer.add_scanner_with_priority(Box::new(kw_scanner), 0 /* try first */);
+    /// ```
     pub fn add_scanner_with_priority(&mut self, scanner: Box<dyn scanners::Scanner>, priority: usize) {
         // Insert scanner at the specified priority (lower index = higher priority)
         if priority >= self.scanners.len() {
@@ -170,6 +223,7 @@ impl Tokenizer {
         }
     }
 
+    /// Adds a regex-backed scanner for `pattern`.
     pub fn add_regex_scanner(
         &mut self,
         pattern: &str,
@@ -181,11 +235,13 @@ impl Tokenizer {
         Ok(self)
     }
 
+    /// Adds a scanner that matches the literal string `symbol`.
     pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &'static str, default_scanner: Option<&'static str>) {
         let scanner = ScannerType::Symbol(SymbolScanner::new(symbol, token_type, default_scanner));
         self.push_scanner(scanner);
     }
 
+    /// Adds a closure-backed scanner.
     pub fn add_closure_scanner(
         &mut self,
         cb: Box<scanners::closure_scanner::ScanClosure>,
@@ -194,12 +250,14 @@ impl Tokenizer {
         self.push_scanner(scanner);
     }
 
+    /// Adds a scanner that dispatches to an arbitrary [`CallbackScanner`](scanners::CallbackScanner).
     pub fn add_callback_scanner(&mut self, cb: Box<dyn scanners::CallbackScanner>) {
         let scanner = ScannerType::Callback(cb);
         self.push_scanner(scanner);
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Adds a block scanner that matches text between `start_delimiter` and `end_delimiter`.
     pub fn add_block_scanner(
         &mut self,
         start_delimiter: &str,
@@ -421,7 +479,63 @@ impl Tokenizer {
         self.scanners.iter().any(|s| matches!(s, ScannerType::Contextual(_)))
     }
 
+    /// Returns the total number of registered scanners (including built-in whitespace
+    /// handling). Useful for testing and introspection.
+    pub fn scanner_count(&self) -> usize {
+        self.scanners.len()
+    }
+
+    /// Returns `true` if no scanners have been registered yet.
+    pub fn is_empty(&self) -> bool {
+        self.scanners.is_empty()
+    }
+
+    /// Tokenize a slice of `input` starting at `byte_offset`.
+    ///
+    /// All byte offsets in the returned tokens are relative to the **start of
+    /// the full original string**, not to `byte_offset`. This makes it easy to
+    /// concatenate results from multiple ranges without re-adjusting spans.
+    ///
+    /// Line/column tracking starts fresh at `(start_line, start_col)`.
+    pub fn tokenize_from<'i>(
+        &self,
+        input: &'i str,
+        byte_offset: usize,
+        start_line: usize,
+        start_col: usize,
+    ) -> Result<Vec<Token<'i>>, Vec<TokenizationError>> {
+        let slice = &input[byte_offset..];
+        // Tokenize the slice; token spans use offsets into the slice.
+        let mut result = self.tokenize(slice)?;
+        // Re-base the byte offsets to the full input, and fix line/col if they
+        // happen to be stored (non-UNKNOWN spans).
+        for tok in &mut result {
+            if tok.span != rb_common::spans::SourceSpan::UNKNOWN {
+                tok.span.start.byte_offset += byte_offset;
+                tok.span.end.byte_offset   += byte_offset;
+                // Adjust line: only the first line of the slice needs offsetting.
+                if tok.span.start.line == 0 {
+                    tok.span.start.line   = start_line.saturating_sub(1);
+                    tok.span.start.column = (tok.span.start.column + start_col).saturating_sub(1);
+                } else {
+                    tok.span.start.line += start_line.saturating_sub(1);
+                }
+                if tok.span.end.line == 0 {
+                    tok.span.end.line   = start_line.saturating_sub(1);
+                    tok.span.end.column = (tok.span.end.column + start_col).saturating_sub(1);
+                } else {
+                    tok.span.end.line += start_line.saturating_sub(1);
+                }
+            }
+        }
+        Ok(result)
+    }
+
     // Enhanced tokenize method with improved whitespace handling
+    /// Tokenises `input`, returning all tokens or a list of errors.
+    ///
+    /// Panics in debug mode if any contextual scanners are registered.
+    /// Use `tokenize_contextual()` in that case.
     pub fn tokenize<'i>(&self, input: &'i str) -> Result<Vec<Token<'i>>, Vec<TokenizationError>> {
         // Guard: contextual scanners are invisible to this path. Catch the mistake early.
         #[cfg(debug_assertions)]
@@ -453,6 +567,7 @@ impl Tokenizer {
                         let token_len = scan_match.consumed_len;
                         let partial = scan_match.token;
 
+                        // Advance position before the drop check so cursor is always correct.
                         let start_byte = pos;
                         let start_pos = SourcePosition {
                             byte_offset: start_byte,
@@ -466,6 +581,12 @@ impl Tokenizer {
                             &mut current_column,
                         );
                         pos += token_len;
+
+                        // Drop trivia if configured.
+                        if self.config.drop_token_types.contains(partial.token_type) {
+                            matched = true;
+                            break;
+                        }
 
                         let span = if self.config.track_token_positions {
                             SourceSpan {
@@ -570,12 +691,14 @@ impl Tokenizer {
                             SourceSpan::UNKNOWN
                         };
 
-                        tokens.push(Token {
-                            token_type: "Whitespace",
-                            token_sub_type: if has_newline { Some("Newline") } else { None },
-                            value: Cow::Borrowed(&input[ws_start_byte..pos]),
-                            span: ws_span,
-                        });
+                        if !self.config.drop_token_types.contains("Whitespace") {
+                            tokens.push(Token {
+                                token_type: "Whitespace",
+                                token_sub_type: if has_newline { Some("Newline") } else { None },
+                                value: Cow::Borrowed(&input[ws_start_byte..pos]),
+                                span: ws_span,
+                            });
+                        }
                     } else {
                         // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
                         while pos < input.len() {
@@ -682,6 +805,12 @@ impl Tokenizer {
                             &mut current_column,
                         );
                         pos += token_len;
+
+                        // Drop trivia if configured.
+                        if self.config.drop_token_types.contains(partial.token_type) {
+                            matched = true;
+                            break;
+                        }
 
                         let span = if self.config.track_token_positions {
                             SourceSpan {
@@ -790,8 +919,10 @@ impl Tokenizer {
                             value: Cow::Borrowed(&input[ws_start_byte..pos]),
                             span: ws_span,
                         };
-                        ctx.prev_token_kind = Some(ws_token.token_type);
-                        tokens.push(ws_token);
+                        if !self.config.drop_token_types.contains(ws_token.token_type) {
+                            ctx.prev_token_kind = Some(ws_token.token_type);
+                            tokens.push(ws_token);
+                        }
                     } else {
                         // Skip whitespace byte-by-byte; fallback to char decode for non-ASCII.
                         while pos < input.len() {

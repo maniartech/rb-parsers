@@ -51,6 +51,7 @@ impl Default for ScanContext {
 }
 
 impl ScanContext {
+    /// Creates a fresh `ScanContext` with default values.
     pub fn new() -> Self {
         Self::default()
     }

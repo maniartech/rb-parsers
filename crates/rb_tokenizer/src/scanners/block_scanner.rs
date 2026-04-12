@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Types of escape rules supported by the scanner
+#[derive(Clone)]
 pub enum EscapeRule {
     /// Simple single-character escape (e.g., \n, \t)
     Simple {
@@ -119,6 +120,7 @@ impl EscapeRule {
 /// `BlockScanner` implementation for parsing block structures with start and end delimiters
 /// that can be nested. This scanner handles structures like code blocks, comments blocks,
 /// string literals with multi-character delimiters, etc.
+#[derive(Clone)]
 pub struct BlockScanner {
     /// The start delimiter that marks the beginning of a block
     start_delimiter: String,
@@ -154,6 +156,7 @@ pub struct BlockScanner {
 
 impl BlockScanner {
     #[allow(clippy::too_many_arguments)]
+    /// Creates a `BlockScanner` with the given delimiters and options.
     pub fn new(
         start_delimiter: &str,
         end_delimiter: &str,

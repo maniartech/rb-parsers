@@ -1,6 +1,17 @@
+#![warn(missing_docs)]
+//! `rb_tokenizer` — a fast, zero-copy tokenizer framework.
+
+/// Tokenizer error catalog — machine-readable codes for tokenizer diagnostics.
+pub mod catalog;
+/// Scanner combinators — composable `Scanner` implementations.
 pub mod scanners;
+/// Token source — buffer and slice-based token stream adapters.
+pub mod token_source;
+/// Token types — `Token`, `TokenId`, and related primitives.
 pub mod tokens;
+/// Tokenizer — the main `Tokenizer` and `BinaryTokenizer` entry points.
 pub mod tokenizers;
+/// Internal utility helpers.
 pub mod utils;
 
 // Re-export main types at crate root for easier access
@@ -10,7 +21,9 @@ pub use scanners::{
     IndentationScanner, KeywordScanner, NumberLiteralScanner, OperatorScanner, ScanContext,
     WhitespaceScanner, WordBoundaryDef,
 };
+pub use token_source::{BufferedTokenSource, SliceTokenSource, TokenSource};
 
+/// Placeholder addition function — present only to satisfy the default workspace template.
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
