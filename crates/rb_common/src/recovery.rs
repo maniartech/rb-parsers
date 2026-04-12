@@ -20,6 +20,7 @@ pub enum RecoveryMode {
 /// Defaults are chosen for interactive tooling and editor workflows.
 #[derive(Debug, Clone)]
 pub struct RecoveryConfig {
+    /// The high-level recovery strategy.
     pub mode: RecoveryMode,
     /// Maximum total error count before the pipeline stops attempting recovery.
     /// `0` means no limit (use with caution).
@@ -71,6 +72,7 @@ pub enum RecoveryBoundaryKind {
 /// A single located boundary where the parser may safely resume.
 #[derive(Debug, Clone)]
 pub struct RecoveryBoundary {
+    /// The kind of this boundary.
     pub kind: RecoveryBoundaryKind,
     /// The span of the token or syntactic element that constitutes this
     /// boundary, if known.
@@ -78,10 +80,12 @@ pub struct RecoveryBoundary {
 }
 
 impl RecoveryBoundary {
+    /// Constructs a boundary with no span information.
     pub fn new(kind: RecoveryBoundaryKind) -> Self {
         RecoveryBoundary { kind, span: None }
     }
 
+    /// Constructs a boundary with an associated span.
     pub fn with_span(kind: RecoveryBoundaryKind, span: SourceSpan) -> Self {
         RecoveryBoundary { kind, span: Some(span) }
     }
@@ -93,6 +97,7 @@ impl RecoveryBoundary {
 /// `common()` and extend.
 #[derive(Debug, Clone, Default)]
 pub struct RecoveryBoundarySet {
+    /// The ordered list of boundary kinds in this set.
     pub kinds: Vec<RecoveryBoundaryKind>,
 }
 
@@ -116,11 +121,13 @@ impl RecoveryBoundarySet {
         s
     }
 
+    /// Adds a custom boundary kind and returns `self`.
     pub fn with_kind(mut self, kind: RecoveryBoundaryKind) -> Self {
         self.kinds.push(kind);
         self
     }
 
+    /// Returns `true` if this set contains no boundary kinds.
     pub fn is_empty(&self) -> bool {
         self.kinds.is_empty()
     }
@@ -173,28 +180,36 @@ impl RecoveryState {
 /// that produced it. This is the canonical "partial result" type.
 #[derive(Debug, Clone)]
 pub struct RecoveredMarker<T> {
+    /// The parse result, which may be partial.
     pub value: T,
+    /// How clean the parse was.
     pub state: RecoveryState,
+    /// The recovery actions that were taken.
     pub actions: Vec<RecoveryAction>,
 }
 
 impl<T> RecoveredMarker<T> {
+    /// Wraps a value produced without any recovery.
     pub fn clean(value: T) -> Self {
         RecoveredMarker { value, state: RecoveryState::Clean, actions: Vec::new() }
     }
 
+    /// Wraps a value produced after successful bounded recovery.
     pub fn recovered(value: T, actions: Vec<RecoveryAction>) -> Self {
         RecoveredMarker { value, state: RecoveryState::Recovered, actions }
     }
 
+    /// Wraps a value produced after partial recovery (low confidence).
     pub fn partial(value: T, actions: Vec<RecoveryAction>) -> Self {
         RecoveredMarker { value, state: RecoveryState::PartialOnly, actions }
     }
 
+    /// Returns `true` if no recovery was needed.
     pub fn is_clean(&self) -> bool {
         self.state == RecoveryState::Clean
     }
 
+    /// Maps the inner value, leaving the recovery state and actions unchanged.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> RecoveredMarker<U> {
         RecoveredMarker { value: f(self.value), state: self.state, actions: self.actions }
     }
@@ -206,13 +221,18 @@ impl<T> RecoveredMarker<T> {
 /// maintains an independent budget and reports through a shared `DiagnosticsContext`.
 #[derive(Debug, Clone, Default)]
 pub struct ErrorBudget {
+    /// Number of errors recorded so far.
     pub error_count: usize,
+    /// Maximum allowed errors (`0` = unlimited).
     pub max_errors: usize,
+    /// Number of tokens skipped so far by recovery.
     pub skip_count: usize,
+    /// Maximum allowed skips per recovery pass (`0` = unlimited).
     pub max_skips: usize,
 }
 
 impl ErrorBudget {
+    /// Initialises the budget from a `RecoveryConfig`.
     pub fn from_config(config: &RecoveryConfig) -> Self {
         ErrorBudget {
             error_count: 0,
@@ -228,10 +248,12 @@ impl ErrorBudget {
             && (self.max_skips == 0 || self.skip_count < self.max_skips)
     }
 
+    /// Increments the error counter.
     pub fn record_error(&mut self) {
         self.error_count += 1;
     }
 
+    /// Increments the skip counter by `count`.
     pub fn record_skip(&mut self, count: usize) {
         self.skip_count += count;
     }

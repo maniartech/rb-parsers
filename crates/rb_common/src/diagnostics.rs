@@ -15,10 +15,12 @@ pub struct Hint {
 }
 
 impl Hint {
+    /// Creates a manually-authored hint with the given text.
     pub fn authored(text: impl Into<String>) -> Self {
         Hint { text: text.into(), is_auto: false }
     }
 
+    /// Creates a framework-generated hint with the given text.
     pub fn auto_generated(text: impl Into<String>) -> Self {
         Hint { text: text.into(), is_auto: true }
     }
@@ -27,7 +29,7 @@ impl Hint {
 // Keep the old severity so that existing users of DiagnosticSeverity (e.g., rb_parser
 // engine.rs which may still reference it) do not immediately break.  New code should
 // use crate::catalog::ErrorSeverity instead.
-#[deprecated(note = "Use rb_common::catalog::ErrorSeverity instead")]
+#[deprecated(since = "0.2.0", note = "Use `rb_common::catalog::ErrorSeverity` instead")]
 pub use crate::catalog::ErrorSeverity as DiagnosticSeverity;
 
 
@@ -37,9 +39,13 @@ pub use crate::catalog::ErrorSeverity as DiagnosticSeverity;
 /// All sinks, renderers, and tooling consumers work with this type.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
+    /// Machine-stable error code referencing an `ErrorCatalog` entry.
     pub code: ErrorCode,
+    /// Severity level (error, warning, note, etc.).
     pub severity: ErrorSeverity,
+    /// Short, static title as it appears in the catalog.
     pub title: &'static str,
+    /// Rendered message with placeholders substituted.
     pub message: String,
     /// Primary failure site and any secondary/context labels.
     pub labels: Vec<SpanLabel>,
@@ -54,14 +60,17 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// Returns `true` if the severity is `Error`.
     pub fn is_error(&self) -> bool {
         self.severity == ErrorSeverity::Error
     }
 
+    /// Returns `true` if the severity is `Warning`.
     pub fn is_warning(&self) -> bool {
         self.severity == ErrorSeverity::Warning
     }
 
+    /// Returns the primary label's location, if one has been set.
     pub fn primary_location(&self) -> Option<&DiagnosticLocation> {
         self.labels
             .iter()
@@ -69,6 +78,7 @@ impl Diagnostic {
             .map(|l| &l.location)
     }
 
+    /// Returns `true` if at least one structured suggestion has been attached.
     pub fn has_suggestions(&self) -> bool {
         !self.suggestions.is_empty()
     }
@@ -127,51 +137,61 @@ impl DiagnosticBuilder {
         }
     }
 
+    /// Attaches a primary label pointing at `location`.
     pub fn primary(mut self, location: DiagnosticLocation) -> Self {
         self.inner.labels.insert(0, SpanLabel::primary(location));
         self
     }
 
+    /// Attaches a primary label with an annotation message.
     pub fn primary_labeled(mut self, location: DiagnosticLocation, msg: impl Into<String>) -> Self {
-        self.inner.labels.insert(0, SpanLabel::primary_with_message(location, msg));
+        self.inner.labels.insert(0, SpanLabel::primary_with_owned_message(location, msg.into()));
         self
     }
 
+    /// Attaches a secondary (contextual) label.
     pub fn secondary(mut self, location: DiagnosticLocation) -> Self {
         self.inner.labels.push(SpanLabel::secondary(location));
         self
     }
 
+    /// Attaches a secondary label with an annotation message.
     pub fn secondary_labeled(mut self, location: DiagnosticLocation, msg: impl Into<String>) -> Self {
-        self.inner.labels.push(SpanLabel::secondary_with_message(location, msg));
+        self.inner.labels.push(SpanLabel::secondary_with_owned_message(location, msg.into()));
         self
     }
 
+    /// Attaches an enclosing-scope hierarchy for context rendering.
     pub fn context(mut self, region: DiagnosticContextRegion) -> Self {
         self.inner.context = Some(region);
         self
     }
 
+    /// Appends an informational note (not actionable).
     pub fn note(mut self, note: impl Into<String>) -> Self {
         self.inner.notes.push(note.into());
         self
     }
 
+    /// Appends an actionable hint.
     pub fn hint(mut self, text: impl Into<String>) -> Self {
         self.inner.hints.push(Hint::authored(text));
         self
     }
 
+    /// Appends a structured suggestion.
     pub fn suggestion(mut self, suggestion: Suggestion) -> Self {
         self.inner.suggestions.push(suggestion);
         self
     }
 
+    /// Overrides the severity inferred from the catalog template.
     pub fn severity(mut self, severity: ErrorSeverity) -> Self {
         self.inner.severity = severity;
         self
     }
 
+    /// Consumes the builder and returns the completed `Diagnostic`.
     pub fn build(self) -> Diagnostic {
         self.inner
     }
@@ -197,11 +217,13 @@ pub enum DiagnosticsMode {
 
 /// The output interface. Each sink owns exactly one output path.
 pub trait DiagnosticSink: Send + Sync {
+    /// Emits `diagnostic` to this sink's output channel.
     fn emit(&self, diagnostic: &Diagnostic);
 }
 
 // ── NullSink ─────────────────────────────────────────────────────────────────
 
+/// A sink that silently discards all diagnostics.
 pub struct NullSink;
 
 impl DiagnosticSink for NullSink {
@@ -210,27 +232,33 @@ impl DiagnosticSink for NullSink {
 
 // ── CollectingSink ────────────────────────────────────────────────────────────
 
+/// A thread-safe sink that buffers diagnostics in memory for later inspection.
 pub struct CollectingSink {
     collected: std::sync::Mutex<Vec<Diagnostic>>,
 }
 
 impl CollectingSink {
+    /// Creates a new empty collecting sink.
     pub fn new() -> Self {
         CollectingSink { collected: std::sync::Mutex::new(Vec::new()) }
     }
 
+    /// Removes and returns all buffered diagnostics.
     pub fn take_all(&self) -> Vec<Diagnostic> {
         std::mem::take(&mut *self.collected.lock().unwrap())
     }
 
+    /// Returns a clone of all buffered diagnostics without consuming them.
     pub fn snapshot(&self) -> Vec<Diagnostic> {
         self.collected.lock().unwrap().clone()
     }
 
+    /// Returns the total number of buffered diagnostics.
     pub fn count(&self) -> usize {
         self.collected.lock().unwrap().len()
     }
 
+    /// Returns the number of error-severity diagnostics buffered.
     pub fn error_count(&self) -> usize {
         self.collected.lock().unwrap().iter().filter(|d| d.is_error()).count()
     }
@@ -248,11 +276,13 @@ impl DiagnosticSink for CollectingSink {
 
 // ── HookSink ─────────────────────────────────────────────────────────────────
 
+/// A sink that calls a closure for every emitted diagnostic.
 pub struct HookSink<F: Fn(&Diagnostic) + Send + Sync> {
     hook: F,
 }
 
 impl<F: Fn(&Diagnostic) + Send + Sync> HookSink<F> {
+    /// Creates a new `HookSink` that calls `hook` on each diagnostic.
     pub fn new(hook: F) -> Self {
         HookSink { hook }
     }
@@ -266,15 +296,18 @@ impl<F: Fn(&Diagnostic) + Send + Sync> DiagnosticSink for HookSink<F> {
 
 // ── CompositeSink ─────────────────────────────────────────────────────────────
 
+/// A sink that fans out each diagnostic to multiple child sinks.
 pub struct CompositeSink {
     sinks: Vec<Box<dyn DiagnosticSink>>,
 }
 
 impl CompositeSink {
+    /// Creates an empty `CompositeSink`.
     pub fn new() -> Self {
         CompositeSink { sinks: Vec::new() }
     }
 
+    /// Appends `sink` and returns `self` (builder pattern).
     pub fn with(mut self, sink: Box<dyn DiagnosticSink>) -> Self {
         self.sinks.push(sink);
         self
@@ -311,6 +344,7 @@ impl DiagnosticsContext {
         Self::collecting()
     }
 
+    /// Creates a context that accumulates all diagnostics in memory.
     pub fn collecting() -> Self {
         DiagnosticsContext {
             mode: DiagnosticsMode::Collect,
@@ -374,8 +408,11 @@ impl DiagnosticsContext {
         }
     }
 
+    /// Returns `true` if at least one error-severity diagnostic has been emitted.
     pub fn has_errors(&self) -> bool { self.error_count > 0 }
+    /// Returns the total count of error-severity diagnostics emitted.
     pub fn error_count(&self) -> usize { self.error_count }
+    /// Returns the total count of warning-severity diagnostics emitted.
     pub fn warning_count(&self) -> usize { self.warning_count }
 
     /// Returns all collected diagnostics in emission order.
@@ -402,6 +439,7 @@ impl DiagnosticsContext {
         self.collected.iter().filter(move |d| d.code == code)
     }
 
+    /// Returns `true` if this context is in collection mode.
     pub fn is_collecting(&self) -> bool {
         matches!(self.mode, DiagnosticsMode::Collect | DiagnosticsMode::CollectAndEmit)
     }
@@ -416,12 +454,16 @@ impl Default for DiagnosticsContext {
 /// Optional severity remapping and code suppression.
 #[derive(Debug, Clone, Default)]
 pub struct SeverityPolicy {
+    /// Treat all warning-severity diagnostics as errors.
     pub warnings_as_errors: bool,
+    /// Diagnostics with these codes are silently discarded.
     pub suppressed: Vec<ErrorCode>,
+    /// Per-code severity overrides.
     pub overrides: Vec<(ErrorCode, ErrorSeverity)>,
 }
 
 impl SeverityPolicy {
+    /// Applies the policy to `diagnostic`, returning `None` if it was suppressed.
     pub fn apply(&self, mut diagnostic: Diagnostic) -> Option<Diagnostic> {
         if self.suppressed.contains(&diagnostic.code) {
             return None;

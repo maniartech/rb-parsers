@@ -6,6 +6,7 @@
 pub struct ErrorCode(pub &'static str);
 
 impl ErrorCode {
+    /// Returns the underlying string code.
     pub fn as_str(self) -> &'static str { self.0 }
 }
 
@@ -20,14 +21,20 @@ impl std::fmt::Display for ErrorCode {
 /// Severity level for diagnostics. Ordered from lowest to highest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ErrorSeverity {
+    /// Informational message that requires no action.
     Info,
+    /// An automated hint; less prominent than a warning.
     Hint,
+    /// A potential problem that does not block compilation.
     Warning,
+    /// A definite error that prevents successful compilation.
     Error,
 }
 
 impl ErrorSeverity {
+    /// Returns `true` if this is the `Error` variant.
     pub fn is_error(self) -> bool { self == ErrorSeverity::Error }
+    /// Returns `true` if this is the `Warning` variant.
     pub fn is_warning(self) -> bool { self == ErrorSeverity::Warning }
 }
 
@@ -48,7 +55,9 @@ impl std::fmt::Display for ErrorSeverity {
 /// Never heap-allocated at runtime.
 #[derive(Debug)]
 pub struct ErrorTemplate {
+    /// The unique code for this error (e.g., `ErrorCode("RBP-0001")`).
     pub code: ErrorCode,
+    /// Default severity for diagnostics produced by this template.
     pub severity: ErrorSeverity,
     /// Short, stable human-readable name.
     pub title: &'static str,
@@ -56,7 +65,9 @@ pub struct ErrorTemplate {
     pub message_template: &'static str,
     /// Default hint strings displayed when no better hint is produced.
     pub default_hints: &'static [&'static str],
+    /// URL slug for linking to online documentation.
     pub docs_slug: &'static str,
+    /// Deprecation notice, if this code has been superseded.
     pub deprecation: Option<&'static str>,
 }
 
@@ -75,7 +86,9 @@ pub trait ErrorCatalog: Send + Sync {
 /// A registry of [`ErrorTemplate`]s under a single namespace (e.g. `"RBP"`).
 /// Backed by a static slice — zero allocation.
 pub struct StaticErrorCatalog {
+    /// The namespace prefix (e.g. `"RBP"`).
     pub namespace: &'static str,
+    /// The catalog's fixed set of error templates.
     pub templates: &'static [ErrorTemplate],
 }
 
@@ -101,10 +114,12 @@ pub struct CompositeErrorCatalog {
 }
 
 impl CompositeErrorCatalog {
+    /// Creates an empty `CompositeErrorCatalog`.
     pub fn new() -> Self {
         CompositeErrorCatalog { catalogs: Vec::new() }
     }
 
+    /// Appends `catalog` and returns `self` (builder pattern).
     pub fn with(mut self, catalog: Box<dyn ErrorCatalog>) -> Self {
         self.catalogs.push(catalog);
         self

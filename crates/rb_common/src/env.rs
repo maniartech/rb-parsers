@@ -92,6 +92,7 @@ impl EnvironmentSnapshot {
 /// Abstracts environment probing so tests can inject deterministic states
 /// without touching real environment variables or file descriptors.
 pub trait EnvironmentDetector {
+    /// Probes the environment and returns a snapshot of the current state.
     fn detect(&self) -> EnvironmentSnapshot;
 }
 
@@ -134,10 +135,12 @@ impl EnvironmentDetector for RealEnvironmentDetector {
 /// Test helper. Creates a fully controlled snapshot without probing the real
 /// environment.
 pub struct FixedEnvironmentDetector {
+    /// The snapshot that will be returned by every call to [`EnvironmentDetector::detect`].
     pub snapshot: EnvironmentSnapshot,
 }
 
 impl FixedEnvironmentDetector {
+    /// Creates a snapshot that simulates a colour-capable terminal (stdout + stderr are TTY).
     pub fn plain_terminal() -> Self {
         FixedEnvironmentDetector {
             snapshot: EnvironmentSnapshot {
@@ -154,6 +157,7 @@ impl FixedEnvironmentDetector {
         }
     }
 
+    /// Creates a snapshot that simulates a CI environment with redirected output (no TTY).
     pub fn redirected_ci() -> Self {
         FixedEnvironmentDetector {
             snapshot: EnvironmentSnapshot {
@@ -170,6 +174,7 @@ impl FixedEnvironmentDetector {
         }
     }
 
+    /// Creates a snapshot that simulates a terminal with `NO_COLOR` set.
     pub fn no_color() -> Self {
         FixedEnvironmentDetector {
             snapshot: EnvironmentSnapshot {

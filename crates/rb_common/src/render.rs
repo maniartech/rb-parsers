@@ -6,25 +6,38 @@ use crate::spans::SourceId;
 
 /// Access to original source text, keyed by `SourceId`.
 pub trait SourceStore: Send + Sync {
+    /// Returns the raw source text for `source_id`, if available.
     fn source_text(&self, source_id: SourceId) -> Option<&str>;
+    /// Returns a human-readable display name (file path, URL, etc.) for `source_id`.
     fn display_name(&self, source_id: SourceId) -> Option<&str>;
 }
 
 // ── SnippetLines ──────────────────────────────────────────────────────────────
 
+/// A window into source text that provides the lines around a primary diagnostic span.
 pub struct SnippetLines {
+    /// Human-readable name of the source file (used in the rendered header).
     pub source_name: String,
+    /// The individual source lines included in the snippet, with context lines.
     pub lines: Vec<SourceLine>,
+    /// Byte range of the primary span within the full source text.
     pub primary_byte_range: std::ops::Range<usize>,
 }
 
+/// A single source line as part of a [`SnippetLines`] window.
 pub struct SourceLine {
+    /// 1-based line number in the original file.
     pub line_number: usize,
+    /// The text content of this line (no trailing newline).
     pub content: String,
+    /// `true` if this line is padding context outside the primary span.
     pub is_context: bool,
 }
 
 impl SnippetLines {
+    /// Extracts a source window around `primary_byte_range` with `context_lines` padding lines.
+    ///
+    /// Returns `None` if the source is not available in `store`.
     pub fn extract(
         store: &dyn SourceStore,
         source_id: SourceId,
@@ -73,36 +86,54 @@ impl SnippetLines {
 
 // ── OutputFormat ──────────────────────────────────────────────────────────────
 
+/// The output format requested from a renderer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutputFormat {
+    /// Choose automatically based on the environment.
     #[default]
     Auto,
+    /// ANSI-coloured terminal output.
     Terminal,
+    /// Plain text without colour or unicode box-drawing.
     Plain,
+    /// Machine-readable JSON envelope.
     Json,
 }
 
 // ── RenderTarget ──────────────────────────────────────────────────────────────
 
+/// The output destination a renderer should write to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RenderTarget {
+    /// Standard output.
     #[default]
     Stdout,
+    /// Standard error.
     Stderr,
+    /// In-memory string (e.g. for tests).
     Memory,
+    /// A named custom sink.
     Custom(&'static str),
 }
 
 // ── RenderOptions ─────────────────────────────────────────────────────────────
 
+/// Rendering options that control format, colour, width, and snippet verbosity.
 #[derive(Debug, Clone)]
 pub struct RenderOptions {
+    /// Output format (plain / terminal / JSON / auto).
     pub format: OutputFormat,
+    /// Colour preference for terminal output.
     pub color: ColorPreference,
+    /// Maximum column width for wrapping, or `None` for unlimited.
     pub width: Option<usize>,
+    /// Whether to embed source snippets in the rendered output.
     pub show_snippets: bool,
+    /// Whether to use unicode box-drawing characters.
     pub unicode: bool,
+    /// Number of context lines above and below the primary span.
     pub context_lines: usize,
+    /// Pretty-print JSON output when `format == OutputFormat::Json`.
     pub json_pretty: bool,
 }
 
@@ -121,6 +152,7 @@ impl Default for RenderOptions {
 }
 
 impl RenderOptions {
+    /// Returns plain-text options with colour disabled.
     pub fn plain() -> Self {
         RenderOptions {
             format: OutputFormat::Plain,
@@ -129,10 +161,12 @@ impl RenderOptions {
         }
     }
 
+    /// Returns compact JSON options.
     pub fn json() -> Self {
         RenderOptions { format: OutputFormat::Json, ..Default::default() }
     }
 
+    /// Returns pretty-printed JSON options.
     pub fn json_pretty() -> Self {
         RenderOptions { format: OutputFormat::Json, json_pretty: true, ..Default::default() }
     }
@@ -140,15 +174,21 @@ impl RenderOptions {
 
 // ── RenderOutputPreset ────────────────────────────────────────────────────────
 
+/// A set of predefined rendering configurations for common deployment scenarios.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderOutputPreset {
+    /// Choose automatically — suitable for interactive CLI use.
     Auto,
+    /// CI environment — plain text, no colour, no unicode.
     Ci,
+    /// Machine consumer — compact JSON.
     Machine,
+    /// Debug/development — rich terminal output with extra context lines.
     Debug,
 }
 
 impl RenderOutputPreset {
+    /// Converts this preset into a concrete [`RenderOptions`].
     pub fn to_options(self) -> RenderOptions {
         match self {
             RenderOutputPreset::Auto => RenderOptions::default(),
@@ -171,27 +211,42 @@ impl RenderOutputPreset {
 
 // ── RenderRequest ─────────────────────────────────────────────────────────────
 
+/// Parameters passed to [`DiagnosticRenderer::suitability`] so renderers can
+/// decide whether they are appropriate for the current environment.
 pub struct RenderRequest<'a> {
+    /// An explicit format override requested by the caller, if any.
     pub format_hint: Option<OutputFormat>,
+    /// The detected rendering environment (TTY, colour support, etc.).
     pub environment: &'a EnvironmentSnapshot,
+    /// The output stream the rendered text will be written to.
     pub target: RenderTarget,
+    /// Rendering options in effect.
     pub options: &'a RenderOptions,
 }
 
 // ── RendererSuitability ───────────────────────────────────────────────────────
 
+/// How well a renderer is suited for a given [`RenderRequest`].
+///
+/// Renderers are ranked and the best-suited one wins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RendererSuitability {
+    /// This renderer cannot produce output for the request.
     Unsupported,
+    /// This renderer can produce output but is not the best choice.
     Fallback(u8),
+    /// This renderer is a good match for the request.
     Preferred(u8),
 }
 
 // ── DiagnosticRenderer trait ──────────────────────────────────────────────────
 
+/// A renderer that can format a [`Diagnostic`] into a human- or machine-readable string.
 pub trait DiagnosticRenderer: Send + Sync {
+    /// Returns how well this renderer fits the [`RenderRequest`].
     fn suitability(&self, request: &RenderRequest<'_>) -> RendererSuitability;
 
+    /// Renders a single diagnostic to a string.
     fn render(
         &self,
         diagnostic: &Diagnostic,
@@ -199,6 +254,7 @@ pub trait DiagnosticRenderer: Send + Sync {
         source: Option<&dyn SourceStore>,
     ) -> String;
 
+    /// Renders a slice of diagnostics, joining them with newlines.
     fn render_batch(
         &self,
         diagnostics: &[Diagnostic],
@@ -215,6 +271,7 @@ pub trait DiagnosticRenderer: Send + Sync {
 
 // ── PlainRenderer ─────────────────────────────────────────────────────────────
 
+/// A plain-text renderer that uses no ANSI escape codes.
 #[derive(Debug, Default)]
 pub struct PlainRenderer;
 
@@ -324,6 +381,7 @@ impl DiagnosticRenderer for PlainRenderer {
 
 // ── TerminalRenderer ──────────────────────────────────────────────────────────
 
+/// A terminal renderer that uses ANSI escape codes when the output is a TTY.
 #[derive(Debug, Default)]
 pub struct TerminalRenderer;
 
@@ -364,6 +422,7 @@ impl DiagnosticRenderer for TerminalRenderer {
 
 // ── JsonRenderer ──────────────────────────────────────────────────────────────
 
+/// A renderer that serialises diagnostics as a JSON envelope.
 #[derive(Debug, Default)]
 pub struct JsonRenderer;
 
@@ -508,15 +567,19 @@ fn pretty_print_json(s: &str) -> String {
 
 // ── RendererSelector ──────────────────────────────────────────────────────────
 
+/// Chooses the best available renderer for a given [`RenderRequest`].
 pub struct RendererSelector {
     renderers: Vec<Box<dyn DiagnosticRenderer>>,
 }
 
 impl RendererSelector {
+    /// Creates an empty selector with no registered renderers.
     pub fn new() -> Self {
         RendererSelector { renderers: Vec::new() }
     }
 
+    /// Creates a selector pre-populated with the standard renderers
+    /// (`TerminalRenderer`, `PlainRenderer`, `JsonRenderer`).
     pub fn default_renderers() -> Self {
         let mut s = RendererSelector::new();
         s.renderers.push(Box::new(TerminalRenderer));
@@ -525,11 +588,14 @@ impl RendererSelector {
         s
     }
 
+    /// Adds `renderer` to this selector and returns `self` (builder pattern).
     pub fn with(mut self, renderer: Box<dyn DiagnosticRenderer>) -> Self {
         self.renderers.push(renderer);
         self
     }
 
+    /// Returns the best-suited renderer for `request`, or `None` if all renderers
+    /// reported [`RendererSuitability::Unsupported`].
     pub fn select<'a>(&'a self, request: &RenderRequest<'_>) -> Option<&'a dyn DiagnosticRenderer> {
         self.renderers
             .iter()
@@ -546,8 +612,13 @@ impl Default for RendererSelector {
     fn default() -> Self { Self::new() }
 }
 
+/// Type alias for [`RendererSelector`]. Use this name when referring to the
+/// registry pattern — both names refer to the same struct.
+pub type RendererRegistry = RendererSelector;
+
 // ── render_to_string ──────────────────────────────────────────────────────────
 
+/// Renders a single `diagnostic` to a string using the best available renderer.
 pub fn render_to_string(
     diagnostic: &Diagnostic,
     options: &RenderOptions,
@@ -565,6 +636,7 @@ pub fn render_to_string(
 
 // ── render_diagnostics ────────────────────────────────────────────────────────
 
+/// Renders all diagnostics in `ctx` using `preset` and returns the combined string.
 pub fn render_diagnostics(
     ctx: &DiagnosticsContext,
     preset: RenderOutputPreset,

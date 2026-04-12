@@ -45,14 +45,17 @@ pub struct TextEdit {
 }
 
 impl TextEdit {
+    /// Creates an insertion at the position denoted by `span.start`.
     pub fn insert(span: SourceSpan, text: impl Into<String>) -> Self {
         TextEdit { span, replacement: text.into(), kind: EditKind::Insert }
     }
 
+    /// Creates a replacement that overwrites the text at `span`.
     pub fn replace(span: SourceSpan, text: impl Into<String>) -> Self {
         TextEdit { span, replacement: text.into(), kind: EditKind::Replace }
     }
 
+    /// Creates a deletion of the text at `span`.
     pub fn delete(span: SourceSpan) -> Self {
         TextEdit { span, replacement: String::new(), kind: EditKind::Delete }
     }
@@ -78,6 +81,7 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
+    /// Creates a new suggestion with the given title, edits, and applicability.
     pub fn new(
         title: impl Into<String>,
         edits: Vec<TextEdit>,
@@ -91,6 +95,7 @@ impl Suggestion {
         }
     }
 
+    /// Creates a machine-applicable suggestion (safe to apply automatically).
     pub fn machine_applicable(title: impl Into<String>, edits: Vec<TextEdit>) -> Self {
         Suggestion {
             title: title.into(),
@@ -100,6 +105,7 @@ impl Suggestion {
         }
     }
 
+    /// Marks this suggestion as the preferred one among multiple alternatives.
     pub fn mark_primary(mut self) -> Self {
         self.is_primary = true;
         self
