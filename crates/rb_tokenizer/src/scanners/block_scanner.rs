@@ -421,6 +421,11 @@ impl BlockScanner {
 }
 
 impl Scanner for BlockScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // Blocks always begin with the start delimiter's first byte.
+        self.start_delimiter.as_bytes().first().map(|&b| vec![b])
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         // Check if the input starts with the start delimiter
         if !input.starts_with(&self.start_delimiter) {

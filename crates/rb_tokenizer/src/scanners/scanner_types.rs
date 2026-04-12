@@ -92,6 +92,27 @@ impl Scanner for ScannerType {
 }
 
 impl ScannerType {
+    /// Returns the first-byte hint for this scanner variant by delegating to
+    /// the inner scanner's [`Scanner::first_bytes`] implementation.
+    /// Returns `None` for scanner types that cannot report a static first-byte set.
+    pub fn first_bytes(&self) -> Option<Vec<u8>> {
+        match self {
+            ScannerType::Symbol(s)        => s.first_bytes(),
+            ScannerType::Keyword(s)       => s.first_bytes(),
+            ScannerType::Operator(s)      => s.first_bytes(),
+            ScannerType::Block(s)         => s.first_bytes(),
+            ScannerType::Eol(s)           => s.first_bytes(),
+            ScannerType::NumberLiteral(s) => s.first_bytes(),
+            ScannerType::Whitespace(s)    => s.first_bytes(),
+            ScannerType::Regex(s)         => s.first_bytes(),
+            ScannerType::CharClass(s)     => s.first_bytes(),
+            ScannerType::Closure(s)       => s.first_bytes(),
+            ScannerType::Scanner(s)       => s.first_bytes(),
+            ScannerType::Callback(_)      => None,   // CallbackScanner has no first_bytes()
+            ScannerType::Contextual(_)    => None,   // no context available at hint time
+        }
+    }
+
     /// Dispatch that supplies a [`ScanContext`] to [`Contextual`](ScannerType::Contextual)
     /// scanners, and falls back to the standard `scan_with_context` path for all others.
     ///

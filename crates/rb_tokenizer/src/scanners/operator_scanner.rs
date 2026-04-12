@@ -80,6 +80,16 @@ impl OperatorScanner {
 }
 
 impl Scanner for OperatorScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        let mut bytes: Vec<u8> = self.entries
+            .iter()
+            .filter_map(|(op, _)| op.as_bytes().first().copied())
+            .collect();
+        bytes.sort_unstable();
+        bytes.dedup();
+        if bytes.is_empty() { None } else { Some(bytes) }
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         for (operator, sub_type) in &self.entries {
             if input.starts_with(operator.as_str()) {

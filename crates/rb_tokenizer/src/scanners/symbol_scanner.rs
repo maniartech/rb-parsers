@@ -19,6 +19,11 @@ impl SymbolScanner {
 }
 
 impl Scanner for SymbolScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // A symbol always starts with its first byte.
+        self.symbol.as_bytes().first().map(|&b| vec![b])
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         if input.starts_with(&self.symbol) {
             Ok(Some(Token {

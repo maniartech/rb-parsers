@@ -58,6 +58,11 @@ impl EolScanner {
 }
 
 impl Scanner for EolScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // EOL token always starts with the first byte of the delimiter.
+        self.delimiter.as_bytes().first().map(|&b| vec![b])
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         // Check if the input starts with the delimiter
         if !input.starts_with(&self.delimiter) {

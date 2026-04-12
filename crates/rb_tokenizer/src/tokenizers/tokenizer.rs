@@ -36,6 +36,13 @@ pub struct Tokenizer {
     last_errors: RefCell<Option<Vec<TokenizationError>>>,
     /// Source identity used on all tokens produced by this instance.
     pub source_id: SourceId,
+    /// For each possible first byte (0–255), the indices of scanners in `self.scanners`
+    /// that claim to match input starting with that byte.
+    /// Built (and rebuilt) by `rebuild_dispatch_table()` whenever a scanner is added.
+    dispatch_table: Vec<Vec<u16>>,   // len == 256; index == first byte value
+    /// Indices of scanners that returned `None` from `first_bytes()` — these are
+    /// tried as a catch-all *after* the byte-specific scanners for any position.
+    fallback_scanners: Vec<u16>,
 }
 
 impl Default for Tokenizer {
@@ -66,6 +73,8 @@ impl Tokenizer {
             config: TokenizerConfig::default(),
             last_errors: RefCell::new(None),
             source_id: SourceId::UNKNOWN,
+            dispatch_table: vec![Vec::new(); 256],
+            fallback_scanners: Vec::new(),
         }
     }
 
@@ -75,7 +84,56 @@ impl Tokenizer {
             config,
             last_errors: RefCell::new(None),
             source_id: SourceId::UNKNOWN,
+            dispatch_table: vec![Vec::new(); 256],
+            fallback_scanners: Vec::new(),
         }
+    }
+
+    /// Rebuild the first-byte dispatch table from the current scanner list.
+    /// Called automatically whenever a scanner is added.
+    fn rebuild_dispatch_table(&mut self) {
+        for slot in &mut self.dispatch_table {
+            slot.clear();
+        }
+        self.fallback_scanners.clear();
+
+        for (idx, scanner) in self.scanners.iter().enumerate() {
+            let idx = idx as u16;
+            match scanner.first_bytes() {
+                Some(bytes) if !bytes.is_empty() => {
+                    for b in bytes {
+                        let slot = &mut self.dispatch_table[b as usize];
+                        if !slot.contains(&idx) {
+                            slot.push(idx);
+                        }
+                    }
+                }
+                _ => {
+                    self.fallback_scanners.push(idx);
+                }
+            }
+        }
+    }
+
+    /// Push a scanner and update the dispatch table incrementally in O(1).
+    /// Use this for all appends; use `rebuild_dispatch_table` after arbitrary inserts.
+    #[inline]
+    fn push_scanner(&mut self, scanner: ScannerType) {
+        let idx = self.scanners.len() as u16;
+        match scanner.first_bytes() {
+            Some(bytes) if !bytes.is_empty() => {
+                for b in bytes {
+                    let slot = &mut self.dispatch_table[b as usize];
+                    if !slot.contains(&idx) {
+                        slot.push(idx);
+                    }
+                }
+            }
+            _ => {
+                self.fallback_scanners.push(idx);
+            }
+        }
+        self.scanners.push(scanner);
     }
 
     /// Sets the source identity used on all tokens produced by this instance.
@@ -98,15 +156,17 @@ impl Tokenizer {
     }
 
     pub fn add_scanner(&mut self, scanner: Box<dyn scanners::Scanner>) {
-        self.scanners.push(ScannerType::Scanner(scanner));
+        self.push_scanner(ScannerType::Scanner(scanner));
     }
 
     pub fn add_scanner_with_priority(&mut self, scanner: Box<dyn scanners::Scanner>, priority: usize) {
         // Insert scanner at the specified priority (lower index = higher priority)
         if priority >= self.scanners.len() {
-            self.scanners.push(ScannerType::Scanner(scanner));
+            self.push_scanner(ScannerType::Scanner(scanner));
         } else {
             self.scanners.insert(priority, ScannerType::Scanner(scanner));
+            // Insertion shifts all indices — full rebuild required.
+            self.rebuild_dispatch_table();
         }
     }
 
@@ -117,13 +177,13 @@ impl Tokenizer {
         sub_token_type: Option<&'static str>,
     ) -> Result<&mut Self, TokenizationError> {
         let scanner = ScannerType::Regex(RegexScanner::new(pattern, token_type, sub_token_type)?);
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
         Ok(self)
     }
 
     pub fn add_symbol_scanner(&mut self, symbol: &str, token_type: &'static str, default_scanner: Option<&'static str>) {
         let scanner = ScannerType::Symbol(SymbolScanner::new(symbol, token_type, default_scanner));
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
     }
 
     pub fn add_closure_scanner(
@@ -131,12 +191,12 @@ impl Tokenizer {
         cb: Box<scanners::closure_scanner::ScanClosure>,
     ) {
         let scanner = ScannerType::Closure(scanners::ClosureScanner::new(cb));
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
     }
 
     pub fn add_callback_scanner(&mut self, cb: Box<dyn scanners::CallbackScanner>) {
         let scanner = ScannerType::Callback(cb);
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -159,7 +219,7 @@ impl Tokenizer {
             raw_mode,
             include_delimiters,
         ));
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
     }
 
     /// Adds an End-of-Line scanner to the tokenizer.
@@ -183,7 +243,7 @@ impl Tokenizer {
             token_sub_type,
             include_delimiter,
         ));
-        self.scanners.push(scanner);
+        self.push_scanner(scanner);
     }
 
     /// Register a [`ContextualScanner`] — a scanner that receives mutable access to
@@ -192,7 +252,7 @@ impl Tokenizer {
     /// Contextual scanners are **invisible** to the standard [`tokenize`](Self::tokenize)
     /// method; use [`tokenize_contextual`](Self::tokenize_contextual) instead.
     pub fn add_contextual_scanner(&mut self, scanner: Box<dyn ContextualScanner>) {
-        self.scanners.push(ScannerType::Contextual(scanner));
+        self.push_scanner(ScannerType::Contextual(scanner));
     }
 
     /// Register a closure as a [`ContextualScanner`].
@@ -206,8 +266,9 @@ impl Tokenizer {
             + Sync
             + 'static,
     ) {
-        self.scanners
-            .push(ScannerType::Contextual(Box::new(ContextualClosureScanner::new(cb))));
+        self.push_scanner(
+            ScannerType::Contextual(Box::new(ContextualClosureScanner::new(cb)))
+        );
     }
 
     /// Register a [`KeywordScanner`] for a list of reserved words.
@@ -219,8 +280,8 @@ impl Tokenizer {
     /// tokenizer.add_keyword_scanner("Keyword", &["if", "else", "while", "return"]);
     /// ```
     pub fn add_keyword_scanner(&mut self, token_type: &'static str, keywords: &[&str]) {
-        self.scanners
-            .push(ScannerType::Keyword(KeywordScanner::new(token_type, keywords)));
+        self.push_scanner(
+            ScannerType::Keyword(KeywordScanner::new(token_type, keywords)));
     }
 
     /// Register a [`KeywordScanner`] where each keyword gets a distinct `token_sub_type`.
@@ -237,8 +298,8 @@ impl Tokenizer {
         token_type: &'static str,
         keywords: &[(&str, &'static str)],
     ) {
-        self.scanners
-            .push(ScannerType::Keyword(KeywordScanner::with_subtypes(token_type, keywords)));
+        self.push_scanner(
+            ScannerType::Keyword(KeywordScanner::with_subtypes(token_type, keywords)));
     }
 
     /// Register a [`CharClassScanner`] using a lead character-class spec and an
@@ -260,7 +321,7 @@ impl Tokenizer {
         token_type: &'static str,
         token_sub_type: Option<&'static str>,
     ) {
-        self.scanners.push(ScannerType::CharClass(CharClassScanner::new(
+        self.push_scanner(ScannerType::CharClass(CharClassScanner::new(
             lead_spec,
             continuation_spec,
             token_type,
@@ -291,7 +352,7 @@ impl Tokenizer {
         token_type: &'static str,
         token_sub_type: Option<&'static str>,
     ) {
-        self.scanners.push(ScannerType::NumberLiteral(
+        self.push_scanner(ScannerType::NumberLiteral(
             NumberLiteralScanner::new(token_type, token_sub_type),
         ));
     }
@@ -305,8 +366,8 @@ impl Tokenizer {
     /// tokenizer.add_operator_scanner("Op", &["+=", "-=", "++", "--", "+", "-", "="]);
     /// ```
     pub fn add_operator_scanner(&mut self, token_type: &'static str, operators: &[&str]) {
-        self.scanners
-            .push(ScannerType::Operator(OperatorScanner::new(token_type, operators)));
+        self.push_scanner(
+            ScannerType::Operator(OperatorScanner::new(token_type, operators)));
     }
 
     /// Register an [`OperatorScanner`] where each operator gets a distinct `token_sub_type`.
@@ -324,8 +385,8 @@ impl Tokenizer {
         token_type: &'static str,
         operators: &[(&str, &'static str)],
     ) {
-        self.scanners
-            .push(ScannerType::Operator(OperatorScanner::with_subtypes(token_type, operators)));
+        self.push_scanner(
+            ScannerType::Operator(OperatorScanner::with_subtypes(token_type, operators)));
     }
 
     /// Register a [`WhitespaceScanner`] for whitespace handling.
@@ -347,7 +408,7 @@ impl Tokenizer {
     /// ));
     /// ```
     pub fn add_whitespace_scanner(&mut self, scanner: WhitespaceScanner) {
-        self.scanners.push(ScannerType::Whitespace(scanner));
+        self.push_scanner(ScannerType::Whitespace(scanner));
     }
 
     /// Returns `true` if any contextual scanner has been registered via
@@ -381,8 +442,12 @@ impl Tokenizer {
         while pos < input.len() {
             let current_input = &input[pos..];
             let mut matched = false;
+            // SAFETY: pos < input.len() guarantees at least one byte.
+            let b0 = current_input.as_bytes()[0];
 
-            for scanner in &self.scanners {
+            let specific = &self.dispatch_table[b0 as usize];
+            for &idx in specific.iter().chain(self.fallback_scanners.iter()) {
+                let scanner = &self.scanners[idx as usize];
                 match scanner.scan_with_context(current_input) {
                     Ok(Some(scan_match)) => {
                         let token_len = scan_match.consumed_len;
@@ -443,7 +508,7 @@ impl Tokenizer {
                         // If we encounter an error but want to continue, skip this character.
                         if self.config.continue_on_error {
                             // Skip the current character without decoding it as a char.
-                            let b0 = current_input.as_bytes()[0];
+                            // b0 already in scope from dispatch table computation above.
                             pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                             current_column += 1;
                             matched = true; // Mark as matched so we don't double-count this error
@@ -457,7 +522,7 @@ impl Tokenizer {
             }
 
             if !matched {
-                let b0 = current_input.as_bytes()[0]; // safe: pos < input.len()
+                // b0 already computed above
                 // Fast ASCII whitespace check; only decode the char for non-ASCII code points.
                 let (is_ws, decoded_char) = if b0.is_ascii() {
                     (matches!(b0, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C), None)
@@ -594,7 +659,11 @@ impl Tokenizer {
             ctx.line = current_line;
             ctx.column = current_column;
 
-            for scanner in &self.scanners {
+            // SAFETY: pos < input.len() guarantees at least one byte.
+            let b0 = current_input.as_bytes()[0];
+            let specific = &self.dispatch_table[b0 as usize];
+            for &idx in specific.iter().chain(self.fallback_scanners.iter()) {
+                let scanner = &self.scanners[idx as usize];
                 match scanner.scan_contextually(current_input, &mut ctx) {
                     Ok(Some(scan_match)) => {
                         let token_len = scan_match.consumed_len;
@@ -654,7 +723,7 @@ impl Tokenizer {
                             return Err(errors);
                         }
                         if self.config.continue_on_error {
-                            let b0 = current_input.as_bytes()[0];
+                            // b0 already in scope from dispatch table computation above
                             pos += if b0 < 0x80 { 1 } else if b0 < 0xE0 { 2 } else if b0 < 0xF0 { 3 } else { 4 };
                             current_column += 1;
                             matched = true;
@@ -668,7 +737,7 @@ impl Tokenizer {
             }
 
             if !matched {
-                let b0 = current_input.as_bytes()[0]; // safe: pos < input.len()
+                // b0 already computed above
                 let (is_ws, decoded_char) = if b0.is_ascii() {
                     (matches!(b0, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C), None)
                 } else {

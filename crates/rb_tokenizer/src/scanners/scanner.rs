@@ -44,6 +44,21 @@ impl AcceptStrategy {
 pub trait Scanner {
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError>;
 
+    /// An optional hint listing the **first bytes** this scanner may match.
+    ///
+    /// Return `Some(bytes)` if the scanner can only ever begin a match when
+    /// `input.as_bytes()[0]` is one of the listed values.  Return `None` if the
+    /// scanner may match any starting byte (regex with variable prefix, catch-all
+    /// recovery, etc.).
+    ///
+    /// This is called **once per registration** to build the tokenizer's first-byte
+    /// dispatch table.  It is never called in the hot tokenize loop.
+    ///
+    /// The default returns `None` — the scanner participates in every dispatch.
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        None
+    }
+
     /// Scan `input` and return a `ScanMatch` carrying both the token and the
     /// number of bytes that were actually consumed from `input`.
     ///

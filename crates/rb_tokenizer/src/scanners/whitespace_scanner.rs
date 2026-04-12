@@ -123,6 +123,25 @@ impl WhitespaceScanner {
 }
 
 impl Scanner for WhitespaceScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // Whitespace scanners always consume ASCII whitespace.
+        // In split mode: space, tab (horizontal only).
+        // In uniform mode: all ASCII whitespace.
+        // Line-continuation mode also accepts backslash.
+        let split_mode = self.newline_token_type.is_some();
+        let mut bytes: Vec<u8> = if split_mode {
+            vec![b' ', b'\t', b'\n', b'\r']  // split still handles \n/\r in its newline branch
+        } else {
+            vec![b' ', b'\t', b'\n', b'\r', 0x0B, 0x0C]
+        };
+        if self.continuation_token_type.is_some() {
+            bytes.push(b'\\');
+        }
+        bytes.sort_unstable();
+        bytes.dedup();
+        Some(bytes)
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         let first = match input.chars().next() {
             None => return Ok(None),

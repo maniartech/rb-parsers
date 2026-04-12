@@ -112,6 +112,19 @@ impl KeywordScanner {
 }
 
 impl Scanner for KeywordScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // Collect the unique first bytes of all registered keywords.
+        // Keywords are ASCII in the vast majority of cases; a non-ASCII first byte
+        // is rare but handled correctly (any leading byte is valid).
+        let mut bytes: Vec<u8> = self.entries
+            .iter()
+            .filter_map(|(kw, _)| kw.as_bytes().first().copied())
+            .collect();
+        bytes.sort_unstable();
+        bytes.dedup();
+        if bytes.is_empty() { None } else { Some(bytes) }
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         for (keyword, sub_type) in &self.entries {
             if !input.starts_with(keyword.as_str()) {

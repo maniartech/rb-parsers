@@ -141,6 +141,16 @@ fn consume_digits<F: Fn(char) -> bool>(
 }
 
 impl Scanner for NumberLiteralScanner {
+    fn first_bytes(&self) -> Option<Vec<u8>> {
+        // Digits 0-9 always start a number.
+        let mut bytes: Vec<u8> = (b'0'..=b'9').collect();
+        // If leading-dot floats are enabled, '.' can also start a number.
+        if self.allow_float && self.allow_leading_dot {
+            bytes.push(b'.');
+        }
+        Some(bytes)
+    }
+
     fn scan<'i>(&self, input: &'i str) -> Result<Option<Token<'i>>, TokenizationError> {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
