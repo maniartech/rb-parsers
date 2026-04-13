@@ -43,7 +43,7 @@ pub mod visitors;
 
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_common::spans::SourceId;
-use rb_tokenizer::token_source::{BufferedTokenSource, SliceTokenSource, TokenSource};
+use rb_tokenizer::token_source::{BufferedTokenSource, SliceTokenSource};
 use rb_tokenizer::tokens::Token;
 
 use crate::cst::CstTree;
@@ -175,7 +175,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         }
 
         let mut parse_ctx = ParseContext::new(
-            Box::new(SliceTokenSource::new(tokens)),
+            SliceTokenSource::new(tokens),
             ctx, profile, source_id,
         );
         let mut strategy = CallbackStrategy(emit);
@@ -194,7 +194,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         source_id: SourceId,
     ) -> CstTree {
         let mut parse_ctx = ParseContext::new(
-            Box::new(SliceTokenSource::new(tokens)),
+            SliceTokenSource::new(tokens),
             ctx, profile, source_id,
         );
         let mut strategy = CstBuildingStrategy::new(source_id);
@@ -214,7 +214,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         capacity_hint: usize,
     ) -> Vec<ParseEvent> {
         let mut parse_ctx = ParseContext::new(
-            Box::new(SliceTokenSource::new(tokens)),
+            SliceTokenSource::new(tokens),
             ctx, profile, source_id,
         );
         let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
@@ -245,8 +245,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         recovery: &RecoveryConfig,
         source_id: SourceId,
     ) -> CstTree {
-        let source: Box<dyn TokenSource<'static> + 'static> =
-            Box::new(BufferedTokenSource::new(iter, 64));
+        let source = BufferedTokenSource::new(iter, 64);
         let mut parse_ctx = ParseContext::new(source, ctx, profile, source_id);
         let mut strategy = CstBuildingStrategy::new(source_id);
         let mut recovery_steps = 0usize;
@@ -264,8 +263,7 @@ impl<R: RuleId> ParseFn for GrammarParseFn<R> {
         source_id: SourceId,
         capacity_hint: usize,
     ) -> Vec<ParseEvent> {
-        let source: Box<dyn TokenSource<'static> + 'static> =
-            Box::new(BufferedTokenSource::new(iter, 64));
+        let source = BufferedTokenSource::new(iter, 64);
         let mut parse_ctx = ParseContext::new(source, ctx, profile, source_id);
         let mut strategy = EventCollectingStrategy::with_capacity(capacity_hint);
         let mut recovery_steps = 0usize;

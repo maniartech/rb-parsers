@@ -133,8 +133,17 @@ pub enum RecoveryAction {
 
 /// The mutable parse state threaded through every combinator call.
 /// `!Send` — holds `&mut DiagnosticsContext`.
-pub struct ParseContext<'src, 'ctx> {
-    source: Box<dyn TokenSource<'src> + 'src>,
+///
+/// The type parameter `TS` is the concrete [`TokenSource`] implementation.
+/// Using a generic parameter (rather than `Box<dyn TokenSource>`) lets the
+/// compiler monomorphise `eval()` per token-source type, eliminating vtable
+/// dispatch overhead on the `peek` / `advance` hot path.
+///
+/// The two common specialisations are:
+/// - `ParseContext<'src, 'ctx, SliceTokenSource<'src>>` — zero-overhead slice mode.
+/// - `ParseContext<'static, 'ctx, BufferedTokenSource<'static, I>>` — streaming mode.
+pub struct ParseContext<'src, 'ctx, TS: TokenSource<'src>> {
+    source: TS,
     /// The diagnostics accumulator for the current parse run.
     pub ctx: &'ctx mut rb_common::diagnostics::DiagnosticsContext,
     /// The language profile governing which rules are active.
@@ -142,13 +151,15 @@ pub struct ParseContext<'src, 'ctx> {
     pub(crate) source_id: rb_common::spans::SourceId,
     committed_at: usize,
     pub(crate) rule_depth: u32,
+    // Encodes the `'src` lifetime so the compiler can verify token lifetimes.
+    _src: std::marker::PhantomData<&'src ()>,
 }
 
-impl<'src, 'ctx> ParseContext<'src, 'ctx> {
-    /// Constructs a new `ParseContext` from a boxed [`TokenSource`], diagnostics
-    /// context, resolved profile, and source identity.
+impl<'src, 'ctx, TS: TokenSource<'src>> ParseContext<'src, 'ctx, TS> {
+    /// Constructs a new `ParseContext` from a concrete [`TokenSource`] value,
+    /// diagnostics context, resolved profile, and source identity.
     pub fn new(
-        source: Box<dyn TokenSource<'src> + 'src>,
+        source: TS,
         ctx: &'ctx mut rb_common::diagnostics::DiagnosticsContext,
         profile: &'ctx crate::profiles::ResolvedProfile,
         source_id: rb_common::spans::SourceId,
@@ -160,6 +171,7 @@ impl<'src, 'ctx> ParseContext<'src, 'ctx> {
             source_id,
             committed_at: 0,
             rule_depth: 0,
+            _src: std::marker::PhantomData,
         }
     }
 

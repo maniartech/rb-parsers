@@ -804,9 +804,9 @@ impl<R: RuleId> CompiledGrammar<R> {
 /// so `&grammar.exprs[idx]` (a sub-borrow of `grammar`) can be passed
 /// recursively alongside `grammar` itself — all as immutable `'g` borrows,
 /// without any `unsafe` code.
-pub(crate) fn eval<'g, R: RuleId, S: ParseStrategy>(
+pub(crate) fn eval<'g, 'src, R: RuleId, S: ParseStrategy, TS: rb_tokenizer::token_source::TokenSource<'src>>(
     expr: &'g RuleExpr<R>,
-    ctx: &mut ParseContext<'_, '_>,
+    ctx: &mut ParseContext<'src, '_, TS>,
     grammar: &'g CompiledGrammar<R>,
     strategy: &mut S,
     current_field: Option<&'static str>,
@@ -1171,9 +1171,9 @@ pub(crate) fn eval<'g, R: RuleId, S: ParseStrategy>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn eval_pratt<'g, R: RuleId, S: ParseStrategy>(
+fn eval_pratt<'g, 'src, R: RuleId, S: ParseStrategy, TS: rb_tokenizer::token_source::TokenSource<'src>>(
     spec: &'g PrattSpec<R>,
-    ctx: &mut ParseContext<'_, '_>,
+    ctx: &mut ParseContext<'src, '_, TS>,
     grammar: &'g CompiledGrammar<R>,
     strategy: &mut S,
     current_field: Option<&'static str>,

@@ -12,7 +12,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rb_common::diagnostics::DiagnosticsContext;
 use rb_parser::prelude::*;
-use rb_tokenizer::{scanners::NumberLiteralScanner, tokens::{SourceSpan, Token}, Tokenizer};
+use rb_tokenizer::{scanners::{NumberLiteralScanner, WhitespaceScanner}, tokens::{SourceSpan, Token}, Tokenizer};
 use std::borrow::Cow;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,6 +384,10 @@ fn bench_parse_throughput(c: &mut Criterion) {
 /// regex scanner — roughly 3× faster number scanning for typical JSON payloads.
 fn json_tokenizer_pipeline() -> Tokenizer {
     let mut t = Tokenizer::new();
+    // Whitespace scanner: recognises spaces, tabs, and newlines.
+    // tokenize_whitespace is false by default, so whitespace tokens are silently
+    // dropped — they never reach the parser, demonstrating the M3 drop_trivia benefit.
+    t.add_whitespace_scanner(WhitespaceScanner::uniform("Whitespace"));
     t.add_block_scanner("\"", "\"", "STRING", None, true, false, false);
     let num = NumberLiteralScanner::minimal("NUMBER", None)
         .allow_float(true)
@@ -405,28 +409,41 @@ fn json_tokenizer_pipeline() -> Tokenizer {
 
 /// JSON string inputs of three sizes used by the vs_serde_json bench.
 ///
-/// The sizes correspond roughly to the existing bench tiers:
-///   small  (~40 B)  — a single flat object
-///   medium (~700 B) — 50-key object with string and integer values
-///   large  (~9 KB)  — array of 200 objects with four fields each
+/// All inputs are **pretty-printed** to exercise whitespace handling: the
+/// tokenizer's WhitespaceScanner matches whitespace and, since
+/// `tokenize_whitespace` is false (default), all whitespace tokens are silently
+/// dropped before reaching the parser.  This demonstrates the M3 drop-trivia
+/// benefit on realistic JSON inputs.
+///
+/// Sizes:
+///   small  (~130 B)  — a single flat object, 4 indented fields
+///   medium (~3.5 KB) — 50-key object with string and integer values
+///   large  (~30 KB)  — array of 200 objects with four fields each
 fn json_str_small() -> String {
-    r#"{"name":"Alice","age":30,"active":true,"score":99.5}"#.to_string()
+    r#"{
+  "name": "Alice",
+  "age": 30,
+  "active": true,
+  "score": 99.5
+}"#.to_string()
 }
 
 fn json_str_medium() -> String {
     let pairs: Vec<String> = (0..50)
-        .map(|i| format!(r#""key{i}":"value{i}","num{i}":{i}"#))
+        .map(|i| format!("  \"key{i}\": \"value{i}\",\n  \"num{i}\": {i}"))
         .collect();
-    format!("{{{}}}", pairs.join(","))
+    format!("{{
+{}
+}}", pairs.join(",\n"))
 }
 
 fn json_str_large() -> String {
     let obj = |i: usize| format!(
-        r#"{{"id":{i},"name":"item{i}","value":{v},"active":true}}"#,
+        "  {{\n    \"id\": {i},\n    \"name\": \"item{i}\",\n    \"value\": {v},\n    \"active\": true\n  }}",
         v = i * 17
     );
     let objs: Vec<String> = (0..200).map(obj).collect();
-    format!("[{}]", objs.join(","))
+    format!("[\n{}\n]", objs.join(",\n"))
 }
 
 fn bench_vs_serde_json(c: &mut Criterion) {
