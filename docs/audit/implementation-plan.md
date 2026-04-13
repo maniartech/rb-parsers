@@ -191,6 +191,7 @@ Add convenience `config.drop_trivia(&["WHITESPACE", "LINE_COMMENT", "BLOCK_COMME
    `rb_tokenizer/src/token_source.rs` ✅
 2. `ParseContext` migrated to `Box<dyn TokenSource<'src> + 'src>` with separate
    `'src` (token data) and `'ctx` (diagnostics/profile borrow) lifetimes ✅
+   *(superseded by M4: `ParseContext` is now generic over `TS: TokenSource<'src>`)*
 3. `parse_tree(&[Token<'_>])` convenience constructs `SliceTokenSource` internally ✅
 4. `parse_streaming(impl Iterator<Item = Token<'static>>)` added to `CompiledParser`
    using `BufferedTokenSource` ✅
@@ -206,10 +207,73 @@ Add convenience `config.drop_trivia(&["WHITESPACE", "LINE_COMMENT", "BLOCK_COMME
 - [⚠️] E2 streaming overhead: ~9% vs slice (criterion was ≤5%; acceptable given
   `BufferedTokenSource` `RefCell`+`VecDeque` design; streaming trades CPU for
   bounded memory)
+- [⚠️] **Post-M3 regression discovered**: `Box<dyn TokenSource>` added 7–15%
+  vtable overhead to every `peek()`/`advance()` call. Fixed in M4.
 
 ---
 
-## Milestone 4 — Grammar Completeness (P2)
+## Milestone 4 — Performance Fix: Monomorphic ParseContext ✅
+
+**Target**: Recover M3 vtable regression; establish realistic whitespace-inclusive benchmarks.
+**Status**: Complete. 311 tests passing.
+**Commit**: `66be5bd` — tagged `perf/milestone-4`
+
+### Context
+
+M3's `Box<dyn TokenSource<'src>>` on `ParseContext` added vtable dispatch to every
+`peek()` and `advance()` call (~3–5 ns vs ~1 ns direct array access). Measured regression
+vs M2 compact-JSON baseline:
+
+| Input  | M2 baseline | Post-M3 | Regression |
+|--------|-------------|---------|------------|
+| small  | 6.0 MiB/s   | 5.5 MiB/s | −8%      |
+| medium | 9.5 MiB/s   | 8.8 MiB/s | −7%      |
+| large  | 7.6 MiB/s   | 6.5 MiB/s | −15%     |
+
+### Work items
+
+#### 4.1 — Generic `ParseContext<'src, 'ctx, TS: TokenSource<'src>>` ✅
+
+**Files**: `crates/rb_parser/src/engine.rs`, `crates/rb_parser/src/grammar/combinator.rs`,
+          `crates/rb_parser/src/lib.rs`
+
+Replaced `Box<dyn TokenSource<'src>>` with a concrete type parameter `TS`.
+`eval()` and `eval_pratt()` gained `TS: TokenSource<'src>` type parameters.
+`run_building()` monomorphises to `SliceTokenSource` — direct slice access, zero
+allocation overhead. `run_streaming_building()` monomorphises to `BufferedTokenSource` —
+also statically dispatched, no outer `Box`.
+
+#### 4.2 — JSON benchmark rewrite with whitespace scanner ✅
+
+**File**: `crates/rb_parser/benches/parser_bench.rs`
+
+- `json_tokenizer_pipeline()` registers `WhitespaceScanner::uniform("Whitespace")`. With
+  `tokenize_whitespace=false` (default), whitespace is recognised and silently dropped
+  before reaching the parser — demonstrates the M3 drop-trivia benefit on realistic inputs.
+- `json_str_{small,medium,large}()` now generate pretty-printed JSON (spaces, newlines,
+  indentation) representative of real-world source files.
+
+### Benchmark results (April 2026 — pretty-printed JSON)
+
+| Input  | rb_pipeline      | serde_json     | Gap      | Notes                                     |
+|--------|------------------|----------------|----------|-----------------------------------------|
+| small  | **20.3 MiB/s**   | 77.7 MiB/s     | 3.8×     | whitespace dropped by tokenizer           |
+| medium | **42.2 MiB/s**   | 59.2 MiB/s     | **1.4×** | near-peer throughput on CST build         |
+| large  | **23.7 MiB/s**   | 92.8 MiB/s     | 3.9×     | CST arena allocation still dominant cost |
+
+serde_json parses the same whitespace-rich text with no tree construction. Medium at
+**1.4× serde_json** is the headline result for a general-purpose CST-building framework.
+
+### Exit criteria
+
+- [x] All 311 tests pass
+- [x] Throughput exceeds M2 compact baseline on all inputs (20/42/24 vs 6/9.5/7.6 MiB/s)
+- [x] Benchmark inputs are pretty-printed with realistic whitespace
+- [x] `ParseContext` type parameter is not a public API breaking change
+
+---
+
+## Milestone 5 — Grammar Completeness (P2)
 
 **Target**: Unlock JS/Python/Ruby-complexity grammars.
 **Issues**: C10, C11, C13, C14, C15, C16
@@ -217,14 +281,14 @@ Add convenience `config.drop_trivia(&["WHITESPACE", "LINE_COMMENT", "BLOCK_COMME
 
 ### Work items
 
-#### 4.1 — C13: `PrattOp::token_sub_type`
+#### 5.1 — C13: `PrattOp::token_sub_type`
 
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 
 Add `token_sub_type: Option<&'static str>` to `PrattOp`. Update `matches_op` predicate.
 Expose in `pratt_op!` macro / builder API.
 
-#### 4.2 — C14: `CompiledParser::with_recovery(config)`
+#### 5.2 — C14: `CompiledParser::with_recovery(config)`
 
 **File**: `crates/rb_parser/src/lib.rs`
 
@@ -239,7 +303,7 @@ impl CompiledParser {
 
 One-liner change; high leverage for test ergonomics.
 
-#### 4.3 — C10: `look(expr)` and `not(expr)` combinators
+#### 5.3 — C10: `look(expr)` and `not(expr)` combinators
 
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 
@@ -247,7 +311,7 @@ Add `RuleExpr::Lookahead { positive: bool, inner: Box<RuleExpr<R>> }` variant.
 Implement in `eval()`: attempt `inner`, then unconditionally restore the token cursor.
 Succeed or fail based on `positive`.
 
-#### 4.4 — C11: `take_until(end)` / `until(content, end)` combinators
+#### 5.4 — C11: `take_until(end)` / `until(content, end)` combinators
 
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 
@@ -255,7 +319,7 @@ Add `RuleExpr::TakeUntil { end: Box<RuleExpr<R>> }` variant.
 `eval`: loop consuming one token at a time until `end` matches at current position
 (without consuming `end`).
 
-#### 4.5 — C15: FIRST set computation in `Grammar::compile()`
+#### 5.5 — C15: FIRST set computation in `Grammar::compile()`
 
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 
@@ -264,7 +328,7 @@ first token types) during the compile step. Store on `CompiledGrammar`.
 
 Expose via `CompiledParser::first_tokens_at_rule(rule_id)` for grammar diagnostics.
 
-#### 4.6 — C16: First-token dispatch in `one_of!`
+#### 5.6 — C16: First-token dispatch in `one_of!`
 
 **File**: `crates/rb_parser/src/grammar/combinator.rs`
 
@@ -282,15 +346,15 @@ gracefully to sequential for branches with no computable FIRST set.
 
 ---
 
-## Milestone 5 — Visitor Ecosystem
+## Milestone 6 — Visitor Ecosystem
 
 **Target**: Rich, ergonomic tree consumption API in the `visitor` crate.
 **Issues**: E3, E4, E5, E6, E7 (partial)
-**Estimated effort**: 2–3 weeks. **Independent of M1–M4.**
+**Estimated effort**: 2–3 weeks. **Independent of M1–M5.**
 
 ### Work items
 
-#### 5.1 — E6: `StreamVisitor` / event-streaming adapter
+#### 6.1 — E6: `StreamVisitor` / event-streaming adapter
 
 **File**: `crates/visitor/src/lib.rs`, or new `crates/visitor/src/stream.rs`
 
@@ -300,7 +364,7 @@ implementations can be passed to `parse_with_strategy`.
 
 **Start here** — it re-uses existing infrastructure with the least new code.
 
-#### 5.2 — E3: `KindVisitor`
+#### 6.2 — E3: `KindVisitor`
 
 **File**: `crates/visitor/src/lib.rs`
 
@@ -308,7 +372,7 @@ Builder-style API (`KindVisitor::new().on_enter(kind, handler)`).
 Implements `TreeVisitor`. O(handlers_for_kind) dispatch; for typical grammars this
 is O(1).
 
-#### 5.3 — E4: `SyntaxCursor`
+#### 6.3 — E4: `SyntaxCursor`
 
 **File**: `crates/rb_parser/src/cst.rs`, `crates/visitor/src/lib.rs`
 
@@ -318,20 +382,20 @@ Add `parent_id: Option<SyntaxNodeId>` to `CstNode` (populated in
 Implement `SyntaxCursor` with `parent()`, `first_child()`, `next_sibling()`,
 `prev_sibling()`, `children()`, `child_of_kind()`, `field()`, `ancestor_of_kind()`.
 
-#### 5.4 — E5: `ContextualWalker`
+#### 6.4 — E5: `ContextualWalker`
 
 **File**: `crates/visitor/src/lib.rs`
 
 `ContextualVisitor` trait + `ContextualWalker` that maintains `Vec<SyntaxNodeId>`
 ancestor stack internally.
 
-#### 5.5 — E7: `TreeTransform` trait + `TransformAction` (stub only)
+#### 6.5 — E7: `TreeTransform` trait + `TransformAction` (stub only)
 
 **File**: `crates/visitor/src/lib.rs`
 
 Define the trait and enum now to establish the stable API shape. Leave
 `CstTree::apply_transform` as `todo!()` behind a `#[doc(hidden)]` flag until C8
-(flat arena) is complete. Full implementation follows in Milestone 6.
+(flat arena) is complete. Full implementation follows in Milestone 7.
 
 ### Exit criteria
 
@@ -341,7 +405,7 @@ Define the trait and enum now to establish the stable API shape. Leave
 
 ---
 
-## Milestone 6 — Architecture Cleanup (P3)
+## Milestone 7 — Architecture Cleanup (P3)
 
 **Target**: Remove structural debt before API stabilization.
 **Issues**: A4, A6, A7, C17, C20, D3, D4, C3, C7
@@ -351,16 +415,16 @@ Define the trait and enum now to establish the stable API shape. Leave
 
 | # | Issue | File | Description |
 |---|---|---|---|
-| 6.1 | A4 | `rb_common/recovery.rs`, `rb_parser/profiles.rs` | Unify duplicate `RecoveryConfig` structs; `rb_parser` imports from `rb_common` |
-| 6.2 | A6/A7 | `rb_common/render.rs` | Implement `RendererSuitability` registry; pass `RenderRequest` env snapshot to `render()` |
-| 6.3 | C17 | `rb_parser/profiles.rs` | Implement `ProfileCatalog` registry for profile guard system |
-| 6.4 | C20 | new `rb_common/source_registry.rs` | `SourceIdRegistry` with collision detection for multi-file setups |
-| 6.5 | D3 | `rb_parser/lib.rs` | Implement `std::error::Error` for `CompiledParser` error type |
-| 6.6 | D4 | all public enums | Add `#[non_exhaustive]` to all public enums across all crates |
-| 6.7 | C3 | `rb_parser/grammar/combinator.rs` | Remove dead `let _stack` allocation in `check_left_recursion` |
-| 6.8 | C7 | `rb_parser/lib.rs` | Remove redundant `unsafe impl Send/Sync` |
+| 7.1 | A4 | `rb_common/recovery.rs`, `rb_parser/profiles.rs` | Unify duplicate `RecoveryConfig` structs; `rb_parser` imports from `rb_common` |
+| 7.2 | A6/A7 | `rb_common/render.rs` | Implement `RendererSuitability` registry; pass `RenderRequest` env snapshot to `render()` |
+| 7.3 | C17 | `rb_parser/profiles.rs` | Implement `ProfileCatalog` registry for profile guard system |
+| 7.4 | C20 | new `rb_common/source_registry.rs` | `SourceIdRegistry` with collision detection for multi-file setups |
+| 7.5 | D3 | `rb_parser/lib.rs` | Implement `std::error::Error` for `CompiledParser` error type |
+| 7.6 | D4 | all public enums | Add `#[non_exhaustive]` to all public enums across all crates |
+| 7.7 | C3 | `rb_parser/grammar/combinator.rs` | Remove dead `let _stack` allocation in `check_left_recursion` |
+| 7.8 | C7 | `rb_parser/lib.rs` | Remove redundant `unsafe impl Send/Sync` |
 
-#### 6.9 — E7 (complete): `CstTree::apply_transform`
+#### 7.9 — E7 (complete): `CstTree::apply_transform`
 
 **After C8 (Milestone 2)**: implement `apply_transform` body using the flat arena.
 Copy-on-write: unmodified children slices are referenced in-place; modified nodes
@@ -374,7 +438,7 @@ are written to a fresh `children_store`.
 
 ---
 
-## Milestone 7 — Ecosystem and Pre-release Polish (P4/P5)
+## Milestone 8 — Ecosystem and Pre-release Polish (P4/P5)
 
 **Target**: Framework is externally consumable and CI-protected.
 **Issues**: D5, D6, D7, D8, D9, D10, B9, B10, B11, C18, C19
@@ -384,18 +448,18 @@ are written to a fresh `children_store`.
 
 | # | Issue | Description |
 |---|---|---|
-| 7.1 | C18 | `CstToken::text<'a>(&self, source: &'a str) -> &'a str` helper |
-| 7.2 | D7 | `CstTree::to_sexpr() -> String` and `impl Display` |
-| 7.3 | B9 | `Tokenizer::scanner_count()` / `scanner_names()` introspection |
-| 7.4 | B10 | Document `add_scanner_with_priority` ordering contract |
-| 7.5 | B11 | `tokenize_from(input, start_byte, start_position)` for incremental re-scan |
-| 7.6 | D6 | `Scanner::clone_box()` + `impl Clone for Tokenizer` |
-| 7.7 | D5 | `[features] serde` gate on `Token`, `CstTree`, `Diagnostic`, `SourceSpan` |
-| 7.8 | C19 | `TriviafreeVisitor`, `AstBuilder<N>` reference implementations in `visitor` |
-| 7.9 | D8 | `fuzz/fuzz_targets/tokenizer.rs` + `fuzz/fuzz_targets/parser.rs` |
-| 7.10 | D9 | Add `#![warn(missing_docs)]` to all crates and fix warnings |
-| 7.11 | D10 | CI benchmark baseline tracking with `github-action-benchmark` |
-| 7.12 | A5 | Update `DiagnosticSeverity` deprecation attr with `since` + `note` |
+| 8.1 | C18 | `CstToken::text<'a>(&self, source: &'a str) -> &'a str` helper |
+| 8.2 | D7 | `CstTree::to_sexpr() -> String` and `impl Display` |
+| 8.3 | B9 | `Tokenizer::scanner_count()` / `scanner_names()` introspection |
+| 8.4 | B10 | Document `add_scanner_with_priority` ordering contract |
+| 8.5 | B11 | `tokenize_from(input, start_byte, start_position)` for incremental re-scan |
+| 8.6 | D6 | `Scanner::clone_box()` + `impl Clone for Tokenizer` |
+| 8.7 | D5 | `[features] serde` gate on `Token`, `CstTree`, `Diagnostic`, `SourceSpan` |
+| 8.8 | C19 | `TriviafreeVisitor`, `AstBuilder<N>` reference implementations in `visitor` |
+| 8.9 | D8 | `fuzz/fuzz_targets/tokenizer.rs` + `fuzz/fuzz_targets/parser.rs` |
+| 8.10 | D9 | Add `#![warn(missing_docs)]` to all crates and fix warnings |
+| 8.11 | D10 | CI benchmark baseline tracking with `github-action-benchmark` |
+| 8.12 | A5 | Update `DiagnosticSeverity` deprecation attr with `since` + `note` |
 
 ### Exit criteria
 
@@ -405,7 +469,7 @@ are written to a fresh `children_store`.
 
 ---
 
-## Milestone 8 — Incremental Re-parse (P4, hardest single item)
+## Milestone 9 — Incremental Re-parse (P4, hardest single item)
 
 **Target**: Sub-100 ms re-parse on a 10k-line file for a single-line edit.
 **Issues**: C12, B11 (reuse from M7)
@@ -462,15 +526,14 @@ M0 (P0 fixed ✅)
 
 ## Priority-ordered backlog (for sprint planning)
 
-| Sprint | Issues | Rationale |
-|---|---|---|
-| 1 | **B4, B6, A8** | Biggest single performance gain; unblocks everything downstream |
-| 2 | **B5, B7, C8** | Close remaining throughput gap; reach 10 MB/s |
-| 3 | **E1** (parallel with S1/S2), **C13, C14** | Quick ergonomics wins; fix broken Pratt |
-| 4 | **C10, C11** | Complete grammar expressiveness for real languages |
-| 5 | **E6, E3, E4, E5** | Visitor ecosystem; low risk, high ergonomics impact |
-| 6 | **E2** (after B4), **B11** | Streaming pipeline + incremental tokenizer restart |
-| 7 | **A4, D4, C20, D3** | Architecture cleanup before API freeze |
-| 8 | **D5, D6, C18, C19, D7, D8, D9, D10, B9, B10, A5** | Polish and release readiness |
-| 9 | **C15, C16** | FIRST-set dispatch (significant compiler work, high payoff for large grammars) |
-| 10 | **C12** | Incremental re-parse (own dedicated sprint) |
+| Sprint | Issues | Status | Rationale |
+|--------|--------|--------|-----------|
+| 1 | ~~B4, B6, A8~~ | ✅ M1 | Token<'src>/Cow — removed dominant allocation source |
+| 2 | ~~B5, B7, C8~~ | ✅ M2 | SourceMap, dispatch table, flat arena |
+| 3 | ~~E1, E2~~ | ✅ M3 | Trivia filtering + streaming pipeline |
+| 4 | ~~M3 vtable regression~~ | ✅ M4 | Generic `ParseContext` — recovered 7–15% overhead |
+| **5** | **C14, C13, C10, C11, C15, C16** | **← NEXT (M5)** | Grammar completeness: Pratt sub-types, lookahead, `take_until`, FIRST-set dispatch |
+| 6 | E6, E3, E4, E5 | M6 | Visitor ecosystem; low risk, high ergonomics impact |
+| 7 | A4, D4, C20, D3 | M7 | Architecture cleanup before API freeze |
+| 8 | D5, D6, C18, C19, D7, D8, D9, D10, B9, B10, B11, A5 | M8 | Polish and release readiness |
+| 9 | C12 | M9 | Incremental re-parse (own dedicated sprint) |
